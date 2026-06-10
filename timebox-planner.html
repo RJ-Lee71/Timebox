@@ -244,6 +244,78 @@ body {
 .block-val.xb { background: rgba(220,80,50,0.07); }
 
 
+
+/* ── 사진 ── */
+let photos = [];
+
+function addPhotos(input){
+  const files = input.files;
+  if(!files.length) return;
+  for(const file of files){
+    compressImage(file, function(dataUrl){
+      photos.push(dataUrl);
+      renderPhotos();
+    });
+  }
+  input.value = '';
+}
+
+function compressImage(file, callback){
+  const reader = new FileReader();
+  reader.onload = function(e){
+    const img = new Image();
+    img.onload = function(){
+      const canvas = document.createElement('canvas');
+      const maxW = 800;
+      const scale = Math.min(1, maxW / img.width);
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      callback(canvas.toDataURL('image/jpeg', 0.7));
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function renderPhotos(){
+  const list = document.getElementById('photoList');
+  const empty = document.getElementById('photoEmpty');
+  list.innerHTML = '';
+  if(!photos.length){ empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  photos.forEach(function(p, i){
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'position:relative;width:80px;height:80px;border-radius:8px;overflow:hidden;border:1px solid var(--line)';
+    wrap.innerHTML = '<img src="'+p+'" style="width:100%;height:100%;object-fit:cover" onclick="viewPhoto(\''+i+'\')">'+
+      '<button onclick="photos.splice('+i+',1);renderPhotos()" style="position:absolute;top:2px;right:2px;width:18px;height:18px;border-radius:50%;background:rgba(200,50,50,0.9);color:#fff;border:none;font-size:11px;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center">×</button>';
+    list.appendChild(wrap);
+  });
+}
+
+function viewRecPhoto(i){
+  const arr = window._recPhotos || [];
+  if(!arr[i]) return;
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  overlay.onclick = function(){ overlay.remove(); };
+  const im = document.createElement('img');
+  im.src = arr[i];
+  im.style.cssText = 'max-width:100%;max-height:100%;border-radius:8px';
+  overlay.appendChild(im);
+  document.body.appendChild(overlay);
+}
+
+function viewPhoto(i){
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  overlay.onclick = function(){ overlay.remove(); };
+  overlay.innerHTML = '<img src="'+photos[i]+'" style="max-width:100%;max-height:100%;border-radius:8px">';
+  document.body.appendChild(overlay);
+}
+
+
 /* ── WORKOUT ── */
 .mg-tag {
   padding: 5px 12px; border-radius: 20px; font-size: 11px; font-weight: 600;
@@ -481,6 +553,19 @@ body {
   <div class="card" style="padding:14px;margin-bottom:14px">
     <div class="lbl">메모</div>
     <textarea id="wkMemo" class="rv-ta" placeholder="오늘 운동 느낌, 컨디션, 특이사항..."></textarea>
+  </div>
+
+  <!-- 사진 -->
+  <div class="card" style="padding:14px;margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div class="lbl" style="margin-bottom:0">📷 사진 (러닝 기록 등)</div>
+      <label style="cursor:pointer">
+        <input type="file" accept="image/*" multiple onchange="addPhotos(this)" style="display:none">
+        <span style="background:var(--navy);color:#fff;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:700;">+ 사진 추가</span>
+      </label>
+    </div>
+    <div id="photoList" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+    <div id="photoEmpty" style="text-align:center;padding:12px 0;font-size:13px;color:var(--muted)">사진 없음</div>
   </div>
 
   <button class="save-btn" onclick="saveWorkout()">운동 저장 💪</button>
@@ -840,7 +925,7 @@ function showRecord(y,m,d,el){
     const wkRaw = localStorage.getItem('wk_' + k);
     if(wkRaw){
       const wk = JSON.parse(wkRaw);
-      html += '<div style="margin-top:14px"><div style="font-size:11px;font-weight:700;letter-spacing:2px;color:var(--navy);margin-bottom:12px;padding-bottom:6px;border-bottom:2px solid var(--accent)">💪 운동일지</div>';
+      html += '<div style="margin-top:14px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding-bottom:6px;border-bottom:2px solid var(--accent)"><div style="font-size:11px;font-weight:700;letter-spacing:2px;color:var(--navy)">💪 운동일지</div><button onclick="editWorkout('+y+','+m+','+d+')" style="font-size:12px;padding:5px 12px;background:var(--navy);color:#fff;border:none;border-radius:8px;cursor:pointer;font-family:\'DM Sans\',sans-serif;font-weight:600;">✏️ 편집</button></div>';
       if(wk.exercises && wk.exercises.length){
         wk.exercises.forEach(function(ex){
           html += '<div class="card" style="padding:12px;margin-bottom:8px">';
@@ -873,11 +958,64 @@ function showRecord(y,m,d,el){
         });
       }
       if(wk.memo) html += '<div class="card" style="padding:12px;margin-bottom:8px"><div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:1px;margin-bottom:6px">MEMO</div><div style="font-size:13px;line-height:1.6;white-space:pre-wrap">'+escHtml(wk.memo)+'</div></div>';
+      if(wk.photos && wk.photos.length){
+        window._recPhotos = wk.photos;
+        html += '<div class="card" style="padding:12px;margin-bottom:8px"><div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:1px;margin-bottom:8px">📷 사진</div><div style="display:flex;flex-wrap:wrap;gap:8px">';
+        wk.photos.forEach(function(p, pi){
+          html += '<img src="'+p+'" style="width:80px;height:80px;object-fit:cover;border-radius:8px;border:1px solid var(--line);cursor:pointer" onclick="viewRecPhoto('+pi+')">';
+        });
+        html += '</div></div>';
+      }
       html += '</div>';
     }
   } catch(e){ console.log('workout display error',e); }
 
   area.innerHTML=html;
+}
+
+function editWorkout(y,m,d){
+  const k = 'wk_' + key(y,m,d);
+  const raw = localStorage.getItem(k);
+  const data = raw ? JSON.parse(raw) : {};
+
+  // 운동 탭으로 이동
+  goPageByName('workout');
+  syncTopTab('workout');
+
+  // 날짜 표시 변경
+  document.getElementById('wkDate').textContent =
+    `${m+1}월 ${d}일 (${DOWS[new Date(y,m,d).getDay()]}) 운동일지`;
+
+  // 기존 데이터 초기화
+  exerciseCount = 0;
+  cardioCount = 0;
+  document.getElementById('exerciseList').innerHTML = '';
+  document.getElementById('cardioList').innerHTML = '';
+  document.getElementById('cardioEmpty').style.display = 'block';
+  document.getElementById('wkMemo').value = '';
+  photos = [];
+  renderPhotos();
+
+  // 데이터 채우기
+  if(data.muscle){
+    wkMuscle = data.muscle;
+    document.querySelectorAll('.mg-tag').forEach(t=>{
+      t.classList.remove('on');
+      if(t.textContent === wkMuscle) t.classList.add('on');
+    });
+  }
+  if(data.exercises) data.exercises.forEach(ex => addExercise(ex));
+  if(data.cardio && Array.isArray(data.cardio)) data.cardio.forEach(cd => addCardio(cd));
+  if(data.memo) document.getElementById('wkMemo').value = data.memo;
+  photos = data.photos || [];
+  renderPhotos();
+
+  // 편집 모드 플래그
+  window._wkEditKey = k;
+  window._wkEditMode = true;
+  workoutInited = true;
+
+  toast(`✏️ ${m+1}월 ${d}일 운동 편집 모드`);
 }
 
 function editDay(y,m,d){
@@ -950,6 +1088,78 @@ function toast(msg){
 }
 
 
+
+/* ── 사진 ── */
+let photos = [];
+
+function addPhotos(input){
+  const files = input.files;
+  if(!files.length) return;
+  for(const file of files){
+    compressImage(file, function(dataUrl){
+      photos.push(dataUrl);
+      renderPhotos();
+    });
+  }
+  input.value = '';
+}
+
+function compressImage(file, callback){
+  const reader = new FileReader();
+  reader.onload = function(e){
+    const img = new Image();
+    img.onload = function(){
+      const canvas = document.createElement('canvas');
+      const maxW = 800;
+      const scale = Math.min(1, maxW / img.width);
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      callback(canvas.toDataURL('image/jpeg', 0.7));
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function renderPhotos(){
+  const list = document.getElementById('photoList');
+  const empty = document.getElementById('photoEmpty');
+  list.innerHTML = '';
+  if(!photos.length){ empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  photos.forEach(function(p, i){
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'position:relative;width:80px;height:80px;border-radius:8px;overflow:hidden;border:1px solid var(--line)';
+    wrap.innerHTML = '<img src="'+p+'" style="width:100%;height:100%;object-fit:cover" onclick="viewPhoto(\''+i+'\')">'+
+      '<button onclick="photos.splice('+i+',1);renderPhotos()" style="position:absolute;top:2px;right:2px;width:18px;height:18px;border-radius:50%;background:rgba(200,50,50,0.9);color:#fff;border:none;font-size:11px;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center">×</button>';
+    list.appendChild(wrap);
+  });
+}
+
+function viewRecPhoto(i){
+  const arr = window._recPhotos || [];
+  if(!arr[i]) return;
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  overlay.onclick = function(){ overlay.remove(); };
+  const im = document.createElement('img');
+  im.src = arr[i];
+  im.style.cssText = 'max-width:100%;max-height:100%;border-radius:8px';
+  overlay.appendChild(im);
+  document.body.appendChild(overlay);
+}
+
+function viewPhoto(i){
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  overlay.onclick = function(){ overlay.remove(); };
+  overlay.innerHTML = '<img src="'+photos[i]+'" style="max-width:100%;max-height:100%;border-radius:8px">';
+  document.body.appendChild(overlay);
+}
+
+
 /* ── WORKOUT ── */
 let wkMuscle = '';
 let wkCardio = '러닝';
@@ -1000,6 +1210,8 @@ function initWorkout(){
   document.getElementById('exerciseList').innerHTML = '';
   document.getElementById('cardioList').innerHTML = '';
   document.getElementById('cardioEmpty').style.display = 'block';
+  photos = [];
+  renderPhotos();
   const d = NOW;
   document.getElementById('wkDate').textContent =
     `${d.getMonth()+1}월 ${d.getDate()}일 (${DOWS[d.getDay()]}) 운동일지`;
@@ -1086,11 +1298,21 @@ function saveWorkout(){
       return { type: activeTag?.textContent?.replace(/[^가-힣a-z]/gi,'').trim()||'러닝', time: inputs[0]?.value, dist: inputs[1]?.value, cal: inputs[2]?.value };
     }),
     memo: document.getElementById('wkMemo').value,
+    photos: photos,
     at: new Date().toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'})
   };
 
-  const wkKey = 'wk_' + todayKey();
-  try { localStorage.setItem(wkKey, JSON.stringify(data)); syncToSheets(wkKey, 'workout', data); } catch(e){}
+  const wkKey = window._wkEditMode ? window._wkEditKey : 'wk_' + todayKey();
+  try {
+    localStorage.setItem(wkKey, JSON.stringify(data));
+    syncToSheets(wkKey, 'workout', data);
+    if(window._wkEditMode){
+      window._wkEditMode = false;
+      window._wkEditKey = null;
+      document.getElementById('wkDate').textContent =
+        `${NOW.getMonth()+1}월 ${NOW.getDate()}일 (${DOWS[NOW.getDay()]}) 운동일지`;
+    }
+  } catch(e){}
   updateStreak();
   toast('운동 저장 완료 💪  ' + data.at);
 }
@@ -1106,6 +1328,7 @@ function loadWorkout(){
       data.cardio.forEach(cd => addCardio(cd));
     }
     if(data.muscle){ wkMuscle = data.muscle; document.querySelectorAll('.mg-tag').forEach(t=>{ if(t.textContent===wkMuscle) t.classList.add('on'); }); }
+    if(data.photos){ photos = data.photos; renderPhotos(); }
     if(data.exercises) data.exercises.forEach(ex => addExercise(ex));
   } catch(e){}
 }
