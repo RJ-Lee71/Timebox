@@ -863,7 +863,13 @@ function showRecord(y,m,d,el){
   const editBtn = `<button onclick="editDay(${y},${m},${d})" style="font-size:12px;padding:6px 14px;background:var(--navy);color:#fff;border:none;border-radius:8px;cursor:pointer;font-family:'DM Sans',sans-serif;font-weight:600;">✏️ ${raw?'편집':'작성'}</button>`;
 
   if(!raw){
-    area.innerHTML=`<div class="rec-hdr" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px"><div class="rec-date">${dateStr}</div>${editBtn}</div><div class="rec-none">저장된 기록이 없어요</div>`;
+    let h = `<div class="rec-hdr" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px"><div class="rec-date">${dateStr}</div>${editBtn}</div><div class="rec-none" style="padding:20px 0">플래너 기록이 없어요</div>`;
+    // 운동일지 섹션
+    const wkRaw0 = localStorage.getItem('wk_' + k);
+    h += '<div style="margin-top:10px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding-bottom:6px;border-bottom:2px solid var(--accent)"><div style="font-size:11px;font-weight:700;letter-spacing:2px;color:var(--navy)">💪 운동일지</div><button onclick="editWorkout('+y+','+m+','+d+')" style="font-size:12px;padding:5px 12px;background:var(--navy);color:#fff;border:none;border-radius:8px;cursor:pointer;font-family:\'DM Sans\',sans-serif;font-weight:600;">✏️ '+(wkRaw0?'편집':'작성')+'</button></div>';
+    h += wkRaw0 ? workoutToHtml(JSON.parse(wkRaw0), y, m, d) : '<div class="rec-none" style="padding:16px 0">운동 기록이 없어요</div>';
+    h += '</div>';
+    area.innerHTML = h;
     return;
   }
   const data=JSON.parse(raw);
@@ -923,9 +929,9 @@ function showRecord(y,m,d,el){
   // 운동일지 표시
   try {
     const wkRaw = localStorage.getItem('wk_' + k);
+    html += '<div style="margin-top:14px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding-bottom:6px;border-bottom:2px solid var(--accent)"><div style="font-size:11px;font-weight:700;letter-spacing:2px;color:var(--navy)">💪 운동일지</div><button onclick="editWorkout('+y+','+m+','+d+')" style="font-size:12px;padding:5px 12px;background:var(--navy);color:#fff;border:none;border-radius:8px;cursor:pointer;font-family:\'DM Sans\',sans-serif;font-weight:600;">✏️ '+(wkRaw?'편집':'작성')+'</button></div>';
     if(wkRaw){
       const wk = JSON.parse(wkRaw);
-      html += '<div style="margin-top:14px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding-bottom:6px;border-bottom:2px solid var(--accent)"><div style="font-size:11px;font-weight:700;letter-spacing:2px;color:var(--navy)">💪 운동일지</div><button onclick="editWorkout('+y+','+m+','+d+')" style="font-size:12px;padding:5px 12px;background:var(--navy);color:#fff;border:none;border-radius:8px;cursor:pointer;font-family:\'DM Sans\',sans-serif;font-weight:600;">✏️ 편집</button></div>';
       if(wk.exercises && wk.exercises.length){
         wk.exercises.forEach(function(ex){
           html += '<div class="card" style="padding:12px;margin-bottom:8px">';
@@ -967,6 +973,8 @@ function showRecord(y,m,d,el){
         html += '</div></div>';
       }
       html += '</div>';
+    } else {
+      html += '<div class="rec-none" style="padding:16px 0">운동 기록이 없어요</div></div>';
     }
   } catch(e){ console.log('workout display error',e); }
 
@@ -1076,6 +1084,51 @@ function showDebug(){
     keys.push(localStorage.key(i));
   }
   el.textContent = '저장된 키: ' + (keys.length ? keys.join(', ') : '없음');
+}
+
+function workoutToHtml(wk, y, m, d){
+  let html = '';
+  if(wk.exercises && wk.exercises.length){
+    wk.exercises.forEach(function(ex){
+      html += '<div class="card" style="padding:12px;margin-bottom:8px">';
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
+      html += '<span style="font-weight:700;font-size:14px;color:var(--navy)">'+escHtml(ex.name||'')+'</span>';
+      html += '<span style="font-size:11px;color:var(--muted);background:var(--bg2);padding:2px 8px;border-radius:10px">'+escHtml(ex.muscle||'')+'</span>';
+      html += '</div>';
+      if(ex.sets && ex.sets.length){
+        html += '<div style="display:grid;grid-template-columns:28px 1fr 1fr;gap:4px;font-size:10px;font-weight:700;color:var(--muted);margin-bottom:4px;text-align:center"><span>세트</span><span>무게(kg)</span><span>횟수(회)</span></div>';
+        ex.sets.forEach(function(s,i){
+          html += '<div style="display:grid;grid-template-columns:28px 1fr 1fr;gap:4px;margin-bottom:4px;font-size:13px;text-align:center">';
+          html += '<span style="font-weight:700;color:var(--accent);line-height:2">'+(i+1)+'</span>';
+          html += '<span style="background:var(--bg2);border-radius:6px;padding:5px">'+(s.kg||0)+'</span>';
+          html += '<span style="background:var(--bg2);border-radius:6px;padding:5px">'+(s.reps||0)+'</span>';
+          html += '</div>';
+        });
+      }
+      html += '</div>';
+    });
+  }
+  if(wk.cardio && Array.isArray(wk.cardio) && wk.cardio.length){
+    wk.cardio.forEach(function(cd){
+      html += '<div class="card" style="padding:12px;margin-bottom:8px">';
+      html += '<div style="font-weight:700;font-size:13px;color:var(--navy);margin-bottom:8px">🏃 '+escHtml(cd.type||'유산소')+'</div>';
+      html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center;font-size:12px">';
+      html += '<div style="background:var(--bg2);border-radius:8px;padding:8px"><div style="color:var(--muted);font-size:10px;margin-bottom:2px">시간</div><b>'+(cd.time||0)+'분</b></div>';
+      html += '<div style="background:var(--bg2);border-radius:8px;padding:8px"><div style="color:var(--muted);font-size:10px;margin-bottom:2px">거리</div><b>'+(cd.dist||0)+'km</b></div>';
+      html += '<div style="background:var(--bg2);border-radius:8px;padding:8px"><div style="color:var(--muted);font-size:10px;margin-bottom:2px">칼로리</div><b>'+(cd.cal||0)+'</b></div>';
+      html += '</div></div>';
+    });
+  }
+  if(wk.memo) html += '<div class="card" style="padding:12px;margin-bottom:8px"><div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:1px;margin-bottom:6px">MEMO</div><div style="font-size:13px;line-height:1.6;white-space:pre-wrap">'+escHtml(wk.memo)+'</div></div>';
+  if(wk.photos && wk.photos.length){
+    window._recPhotos = wk.photos;
+    html += '<div class="card" style="padding:12px;margin-bottom:8px"><div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:1px;margin-bottom:8px">📷 사진</div><div style="display:flex;flex-wrap:wrap;gap:8px">';
+    wk.photos.forEach(function(p, pi){
+      html += '<img src="'+p+'" style="width:80px;height:80px;object-fit:cover;border-radius:8px;border:1px solid var(--line);cursor:pointer" onclick="viewRecPhoto('+pi+')">';
+    });
+    html += '</div></div>';
+  }
+  return html;
 }
 
 function escHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
