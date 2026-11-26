@@ -86,7 +86,7 @@ body {
 .ex.soft { background: rgba(26,50,96,0.04); }
 .ex.soft .ex-nm { color: var(--muted); font-weight: 600; font-size: 13px; }
 .start-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 12px; color: var(--muted); }
-.start-row input { width: 80px; }
+.start-row .inp { width: 64px; padding: 6px 8px; font-size: 14px; border-radius: 8px; text-align: center; }
 
 /* ── FORM ── */
 .form { padding: 14px; }
@@ -332,7 +332,7 @@ function renderRoutine() {
     const w = currentWeight(it.id);
     const wHtml = w == null ? '<div class="ex-w none">무게 미정</div>' : `<div class="ex-w">${fmt(w)}<small>kg</small></div>`;
     const startInput = hasLogs(it.id) ? '' :
-      `<div class="start-row"><span>시작 무게</span><input class="inp" type="number" inputmode="decimal" step="0.5" min="0" data-start="${it.id}" value="${starts[it.id] != null ? esc(starts[it.id]) : (it.start != null ? it.start : '')}" placeholder="kg"><span>kg</span></div>`;
+      `<div class="start-row"><span>시작 무게</span><input class="inp" type="number" inputmode="decimal" step="0.5" min="0" data-start="${it.id}" value="${starts[it.id] != null ? esc(starts[it.id]) : (it.start != null ? it.start : '')}"><span>kg</span></div>`;
     return `<div class="ex">
       <div class="ex-top"><div class="ex-nm">${esc(it.name)}</div>${wHtml}</div>
       <div class="ex-meta"><span class="pill">${esc(it.sets)}</span><span class="pill">휴식 ${esc(it.rest)}</span><span class="pill up">기준 ${it.target}회 채우면 +${fmt(it.inc)}kg</span></div>
