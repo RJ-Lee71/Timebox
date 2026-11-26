@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>TimeBox Workout</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+:root {
+  --navy: #0f1f3d;
+  --navy-mid: #1a3260;
+  --accent: #c8a96e;
+  --accent-light: #e8d5a3;
+  --bg: #f5f2ec;
+  --bg2: #ede9e0;
+  --text: #1a1a2e;
+  --muted: #6b6b7e;
+  --white: #fefefe;
+  --green: #4a7c59;
+  --line: rgba(15,31,61,0.1);
+  --r: 14px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body { overflow-x: hidden; }
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  max-width: 430px;
+  margin: 0 auto;
+  min-height: 100vh;
+}
+
+/* ── HEADER ── */
+.hdr { background: var(--navy); padding: 10px 16px 0; position: sticky; top: 0; z-index: 200; }
+.hdr-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.logo { font-family: 'DM Serif Display', serif; font-size: 17px; color: #fff; letter-spacing: -0.5px; }
+.logo em { color: var(--accent); font-style: normal; }
+.back {
+  background: rgba(200,169,110,0.2); border: 1px solid rgba(200,169,110,0.4); border-radius: 8px;
+  padding: 3px 9px; font-size: 11px; color: var(--accent); font-weight: 600; text-decoration: none;
+}
+.tabs { display: flex; }
+.tab {
+  flex: 1; padding: 6px 0; text-align: center;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.8px;
+  color: rgba(255,255,255,0.4); cursor: pointer;
+  border-bottom: 2px solid transparent; transition: all .2s;
+}
+.tab.on { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* ── PAGES ── */
+.page { display: none; padding: 14px 14px 40px; }
+.page.on { display: block; }
+.lbl { font-size: 10px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+
+.card { background: var(--white); border-radius: var(--r); border: 1px solid var(--line); margin-bottom: 14px; overflow: hidden; }
+.card-dark { background: var(--navy); border-radius: var(--r); margin-bottom: 14px; padding: 16px; color: #fff; }
+
+/* ── NEXT CARD ── */
+.next-k { font-size: 10px; font-weight: 700; letter-spacing: 2px; color: var(--accent); text-transform: uppercase; }
+.next-v { font-family: 'DM Serif Display', serif; font-size: 26px; margin: 4px 0 2px; }
+.next-s { font-size: 12px; color: rgba(255,255,255,0.55); }
+
+/* ── CHIPS ── */
+.chips { display: flex; gap: 8px; margin-bottom: 14px; }
+.chip {
+  flex: 1; padding: 8px 4px; border-radius: 20px; font-size: 12px; font-weight: 600; text-align: center;
+  background: var(--bg2); color: var(--muted); border: 1px solid var(--line); cursor: pointer; transition: all .2s;
+}
+.chip.on { background: var(--navy); color: #fff; border-color: var(--navy); }
+.chip .dot { color: var(--accent); }
+
+/* ── EXERCISE ROWS ── */
+.ex { padding: 13px 14px; border-top: 1px solid var(--line); }
+.ex:first-child { border-top: none; }
+.ex-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.ex-nm { font-size: 14px; font-weight: 600; color: var(--navy); }
+.ex-w { font-family: 'DM Serif Display', serif; font-size: 24px; color: var(--navy); white-space: nowrap; }
+.ex-w small { font-family: 'DM Sans', sans-serif; font-size: 12px; color: var(--muted); margin-left: 2px; }
+.ex-w.none { font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600; color: var(--muted); }
+.ex-meta { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.pill { font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 12px; background: var(--bg2); color: var(--navy); }
+.pill.up { background: rgba(200,169,110,0.18); color: #7a5c20; }
+.ex-memo { font-size: 12px; color: var(--muted); line-height: 1.5; }
+.ex.soft { background: rgba(26,50,96,0.04); }
+.ex.soft .ex-nm { color: var(--muted); font-weight: 600; font-size: 13px; }
+.start-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 12px; color: var(--muted); }
+.start-row input { width: 80px; }
+
+/* ── FORM ── */
+.form { padding: 14px; }
+.f-row { margin-bottom: 12px; }
+.f-row label { display: block; font-size: 11px; font-weight: 700; color: var(--muted); margin-bottom: 5px; letter-spacing: 0.5px; }
+.inp {
+  width: 100%; padding: 10px 11px; background: var(--bg); border: 1px solid var(--line); border-radius: 10px;
+  font-family: 'DM Sans', sans-serif; font-size: 15px; color: var(--text); outline: none;
+  -webkit-appearance: none; appearance: none;
+}
+select.inp {
+  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position: calc(100% - 16px) 50%, calc(100% - 11px) 50%; background-size: 5px 5px; background-repeat: no-repeat;
+  padding-right: 30px;
+}
+.inp:focus { border-color: var(--accent); }
+.sets { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.sets .inp { text-align: center; }
+.hint { font-size: 12px; color: var(--muted); margin-top: 5px; }
+.save-btn {
+  width: 100%; padding: 14px; background: var(--navy); color: #fff; border: none; border-radius: var(--r);
+  font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 700; letter-spacing: 0.5px; cursor: pointer; transition: all .2s;
+}
+.save-btn:active { transform: scale(.98); opacity: .9; }
+
+/* ── LOG LIST ── */
+.log { display: flex; gap: 10px; align-items: center; padding: 11px 14px; border-top: 1px solid var(--line); }
+.log:first-child { border-top: none; }
+.log-main { flex: 1; min-width: 0; }
+.log-d { font-size: 11px; color: var(--muted); }
+.log-n { font-size: 13px; font-weight: 600; color: var(--navy); margin: 1px 0; }
+.log-r { font-size: 12px; color: var(--text); }
+.log-next { font-size: 12px; font-weight: 600; color: var(--muted); text-align: right; white-space: nowrap; }
+.log-next.up { color: var(--green); }
+.log-next b { display: block; font-family: 'DM Serif Display', serif; font-size: 17px; font-weight: 400; }
+.del { background: transparent; border: none; color: rgba(200,60,60,0.6); font-size: 16px; cursor: pointer; padding: 4px; }
+.empty { text-align: center; padding: 28px 16px; color: var(--muted); font-size: 13px; }
+
+/* ── GUIDE ── */
+.guide { padding: 14px 16px; border-top: 1px solid var(--line); }
+.guide:first-child { border-top: none; }
+.guide h3 { font-family: 'DM Serif Display', serif; font-weight: 400; font-size: 17px; color: var(--navy); margin-bottom: 6px; }
+.guide p, .guide li { font-size: 13px; line-height: 1.7; color: var(--text); }
+.guide ul { padding-left: 18px; }
+
+/* ── TOAST ── */
+.toast {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(16px);
+  background: var(--green); color: #fff; padding: 10px 22px; border-radius: 24px;
+  font-size: 13px; font-weight: 600; opacity: 0; transition: all .3s; z-index: 300;
+  white-space: nowrap; pointer-events: none;
+}
+.toast.on { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="hdr-top">
+    <div class="logo">TimeBox <em>Workout</em></div>
+    <a class="back" href="timebox-planner.html">← 플래너</a>
+  </div>
+  <div class="tabs">
+    <div class="tab on" data-p="routine">📋 루틴</div>
+    <div class="tab" data-p="log">✍️ 기록</div>
+    <div class="tab" data-p="guide">📖 사용법</div>
+  </div>
+</div>
+
+<!-- 루틴 -->
+<div class="page on" id="p-routine">
+  <div class="card-dark">
+    <div class="next-k">다음 차례</div>
+    <div class="next-v" id="nextName"></div>
+    <div class="next-s" id="nextSub"></div>
+  </div>
+  <div class="chips" id="chips"></div>
+  <div class="lbl" id="dayLbl"></div>
+  <div class="card" id="exList"></div>
+</div>
+
+<!-- 기록 -->
+<div class="page" id="p-log">
+  <div class="lbl">오늘 기록</div>
+  <div class="card"><div class="form">
+    <div class="f-row"><label for="fEx">운동</label><select class="inp" id="fEx"></select></div>
+    <div class="f-row"><label for="fDate">날짜</label><input class="inp" type="date" id="fDate"></div>
+    <div class="f-row"><label for="fW">무게 (kg)</label><input class="inp" type="number" inputmode="decimal" step="0.5" min="0" id="fW" placeholder="비워두면 무게 없이 기록"></div>
+    <div class="f-row">
+      <label>세트별 횟수</label>
+      <div class="sets">
+        <input class="inp" type="number" inputmode="numeric" min="0" id="fR1" placeholder="1세트">
+        <input class="inp" type="number" inputmode="numeric" min="0" id="fR2" placeholder="2세트">
+        <input class="inp" type="number" inputmode="numeric" min="0" id="fR3" placeholder="3세트">
+      </div>
+      <div class="hint" id="fHint"></div>
+    </div>
+    <button class="save-btn" id="saveBtn">기록 저장 💪</button>
+  </div></div>
+  <div class="lbl">지난 기록</div>
+  <div class="card" id="logList"></div>
+</div>
+
+<!-- 사용법 -->
+<div class="page" id="p-guide">
+  <div class="card">
+    <div class="guide">
+      <h3>운동 순서</h3>
+      <p>요일을 정해두지 않고 ① 등·이두 → ② 가슴·삼두 → ③ 하체·어깨 순서로 돌아가며 주 3회 해요. 루틴 탭 맨 위의 “다음 차례”를 보면 오늘 할 부위를 알 수 있어요.</p>
+      <p>PT 받은 날도 주 3회에 포함해요. PT 때 한 부위는 차례를 건너뛰세요 (그날 PT에서 다룬 부위로 기록해 두면 다음 차례가 자동으로 넘어가요).</p>
+    </div>
+    <div class="guide">
+      <h3>러닝</h3>
+      <p>러닝을 하고 싶은 날은 웨이트가 없는 날에 가볍게 해요. 하체 운동 다음 날은 피하는 게 좋아요.</p>
+    </div>
+    <div class="guide">
+      <h3>기록하는 법</h3>
+      <ul>
+        <li>운동이 끝나면 기록 탭에서 운동을 고르고, 날짜와 무게(이번 무게가 자동으로 채워져요)를 확인해요.</li>
+        <li>1~3세트에 실제로 한 횟수를 적고 저장해요.</li>
+        <li>잘못 적었으면 지난 기록 목록에서 ✕ 로 지우고 다시 적으면 돼요.</li>
+      </ul>
+    </div>
+    <div class="guide">
+      <h3>자동 계산 규칙</h3>
+      <ul>
+        <li>3세트 모두 “기준 횟수” 이상 했다면 다음 무게 = 이번 무게 + 증량.</li>
+        <li>하나라도 못 채웠다면 다음에도 같은 무게.</li>
+        <li>루틴 탭의 “이번 무게”는 그 운동의 가장 최근 기록(무게를 적은 것)의 다음 무게예요. 기록이 없으면 직접 입력한 시작 무게를 보여줘요.</li>
+      </ul>
+    </div>
+    <div class="guide">
+      <h3>시작 무게 찾는 법</h3>
+      <p>정해진 횟수를 할 때 마지막 2~3회가 힘들지만 자세는 무너지지 않는 무게가 시작 무게예요. 처음엔 가볍게 시작해서 한두 번 해 보며 맞춰 가세요. 루틴 탭에서 기록이 없는 운동은 시작 무게를 입력할 수 있어요.</p>
+    </div>
+    <div class="guide">
+      <h3>기록은 이 기기에만 저장돼요</h3>
+      <p>기록과 시작 무게는 지금 쓰는 이 기기의 이 브라우저에만 저장돼요. 다른 폰이나 브라우저에서는 보이지 않고, 브라우저 데이터를 지우면 함께 사라져요.</p>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ── 루틴 데이터 ── */
+const DAYS = [
+  { id: 'back', no: '①', name: '등·이두', items: [
+    { soft: true, name: '워밍업 5분', memo: '실내자전거 3분 + 가벼운 랫풀다운 15회' },
+    { id: 'latpull', name: '랫풀다운', sets: '3×10–12', rest: '90초', memo: '가슴 위쪽으로 당기고 반동 없이', start: null, inc: 5, target: 12 },
+    { id: 'cablerow', name: '시티드 케이블 로우', sets: '3×10–12', rest: '90초', memo: '허리 세우고 팔꿈치를 뒤로 당기기', start: null, inc: 5, target: 12 },
+    { id: 'dbrow', name: '원암 덤벨 로우', sets: '3×10–12 (한쪽씩)', rest: '60초', memo: '벤치에 한 손·한 무릎 짚고', start: null, inc: 2, target: 12 },
+    { id: 'dbcurl', name: '덤벨 컬', sets: '3×10–12', rest: '60초', memo: '팔꿈치 고정, 천천히 내리기', start: null, inc: 1, target: 12 },
+    { id: 'hammer', name: '해머 컬', sets: '3×10–12', rest: '60초', memo: '엄지가 위로 향하게', start: null, inc: 1, target: 12 },
+    { soft: true, name: '마무리 스트레칭 3분', memo: '등·팔 스트레칭' }
+  ]},
+  { id: 'chest', no: '②', name: '가슴·삼두', items: [
+    { soft: true, name: '워밍업 5분', memo: '실내자전거 3분 + 빈 봉 벤치프레스 10회' },
+    { id: 'bench', name: '바벨 벤치프레스', sets: '3×8–10', rest: '2분', memo: '세이프티 바 맞추고 날개뼈 모으기', start: null, inc: 2.5, target: 10 },
+    { id: 'incline', name: '인클라인 덤벨 프레스', sets: '3×10–12', rest: '90초', memo: '벤치 각도 30~45도', start: null, inc: 2, target: 12 },
+    { id: 'pecdeck', name: '펙덱 플라이', sets: '3×12–15', rest: '60초', memo: '가슴이 늘어나는 느낌으로 천천히', start: null, inc: 5, target: 15 },
+    { id: 'pushdown', name: '케이블 푸시다운', sets: '3×12–15', rest: '60초', memo: '팔꿈치를 옆구리에 고정', start: null, inc: 2.5, target: 15 },
+    { id: 'ohext', name: '오버헤드 덤벨 익스텐션', sets: '3×12–15', rest: '60초', memo: '덤벨 하나를 양손으로 잡고', start: null, inc: 2, target: 15 },
+    { soft: true, name: '마무리 스트레칭 3분', memo: '가슴·삼두 스트레칭' }
+  ]},
+  { id: 'legs', no: '③', name: '하체·어깨', items: [
+    { soft: true, name: '워밍업 6분', memo: '실내자전거 3분 → 빈 봉 스쿼트 10회 → 본세트 무게의 70%로 5회' },
+    { id: 'squat', name: '바벨 스쿼트', sets: '3×8–10', rest: '2분', memo: '세이프티 바 필수, 무릎은 발끝 방향', start: 40, inc: 2.5, target: 10 },
+    { id: 'legpress', name: '레그프레스', sets: '3×12', rest: '75초', memo: '무릎을 끝까지 펴서 잠그지 않기', start: null, inc: 5, target: 12 },
+    { id: 'legext', name: '레그 익스텐션', sets: '3×12–15', rest: '60초', memo: '무릎을 기계 회전축에 맞추기', start: null, inc: 5, target: 15 },
+    { id: 'legcurl', name: '레그 컬', sets: '3×12–15', rest: '60초', memo: '내릴 때 천천히', start: null, inc: 5, target: 15 },
+    { id: 'lateral', name: '사이드 레터럴 레이즈', sets: '3×12–15', rest: '번갈아 45초', memo: '리어델트 머신과 번갈아 하기, 가볍게', start: null, inc: 1, target: 15 },
+    { id: 'reardelt', name: '리어델트 머신', sets: '3×12–15', rest: '번갈아 45초', memo: '펙덱 머신에 거꾸로 앉아서', start: null, inc: 5, target: 15 },
+    { soft: true, name: '마무리 스트레칭 3분', memo: '허벅지 앞·뒤, 엉덩이 스트레칭' }
+  ]}
+];
+const EX = {};
+DAYS.forEach((d, di) => d.items.forEach(it => { if (it.id) EX[it.id] = Object.assign({ day: di }, it); }));
+
+/* ── 저장소 (wr_ 접두어) ── */
+const K_LOGS = 'wr_logs', K_START = 'wr_start';
+function load(k, def) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : def; } catch (e) { return def; } }
+function store(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } }
+let logs = load(K_LOGS, []);
+let starts = load(K_START, {});
+
+/* ── 계산 ── */
+const fmt = n => (Math.round(n * 100) / 100).toString();
+function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+// 최신순: 날짜 내림차순, 같은 날이면 나중에 저장한 것 먼저
+function sorted() {
+  return logs.map((l, i) => [l, i])
+    .sort(([a, ai], [b, bi]) => (b.date === a.date ? (b.ts - a.ts) || (bi - ai) : (b.date < a.date ? -1 : 1)))
+    .map(x => x[0]);
+}
+function nextDayIdx() {
+  const s = sorted().filter(l => EX[l.ex]);
+  return s.length ? (EX[s[0].ex].day + 1) % DAYS.length : 0;
+}
+function startOf(id) {
+  if (starts[id] != null && starts[id] !== '') return Number(starts[id]);
+  return EX[id].start;
+}
+function hasLogs(id) { return logs.some(l => l.ex === id); }
+function currentWeight(id) {
+  const last = sorted().find(l => l.ex === id && l.w != null);
+  if (last) return last.next;
+  return startOf(id);
+}
+function calcNext(id, w, reps) {
+  if (w == null) return { next: null, up: false };
+  const ex = EX[id];
+  const up = reps.length === 3 && reps.every(r => r != null && r >= ex.target);
+  return { next: up ? w + ex.inc : w, up };
+}
+
+/* ── 탭 ── */
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
+  document.querySelectorAll('.tab').forEach(x => x.classList.toggle('on', x === t));
+  document.querySelectorAll('.page').forEach(p => p.classList.toggle('on', p.id === 'p-' + t.dataset.p));
+  window.scrollTo(0, 0);
+}));
+
+/* ── 루틴 탭 ── */
+let viewDay = nextDayIdx();
+function renderRoutine() {
+  const nd = nextDayIdx();
+  const d = DAYS[nd];
+  document.getElementById('nextName').textContent = d.no + ' ' + d.name;
+  const s = sorted().filter(l => EX[l.ex]);
+  document.getElementById('nextSub').textContent = s.length
+    ? '최근 기록: ' + s[0].date.replace(/-/g, '.') + ' · ' + DAYS[EX[s[0].ex].day].name
+    : '아직 기록이 없어요. ①부터 시작해요.';
+
+  document.getElementById('chips').innerHTML = DAYS.map((x, i) =>
+    `<div class="chip${i === viewDay ? ' on' : ''}" data-i="${i}">${x.no} ${x.name}${i === nd ? ' <span class="dot">●</span>' : ''}</div>`).join('');
+  document.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => { viewDay = +c.dataset.i; renderRoutine(); }));
+
+  const day = DAYS[viewDay];
+  document.getElementById('dayLbl').textContent = day.no + ' ' + day.name + ' 루틴';
+  document.getElementById('exList').innerHTML = day.items.map(it => {
+    if (it.soft) return `<div class="ex soft"><div class="ex-nm">${esc(it.name)}</div><div class="ex-memo">${esc(it.memo)}</div></div>`;
+    const w = currentWeight(it.id);
+    const wHtml = w == null ? '<div class="ex-w none">무게 미정</div>' : `<div class="ex-w">${fmt(w)}<small>kg</small></div>`;
+    const startInput = hasLogs(it.id) ? '' :
+      `<div class="start-row"><span>시작 무게</span><input class="inp" type="number" inputmode="decimal" step="0.5" min="0" data-start="${it.id}" value="${starts[it.id] != null ? esc(starts[it.id]) : (it.start != null ? it.start : '')}" placeholder="kg"><span>kg</span></div>`;
+    return `<div class="ex">
+      <div class="ex-top"><div class="ex-nm">${esc(it.name)}</div>${wHtml}</div>
+      <div class="ex-meta"><span class="pill">${esc(it.sets)}</span><span class="pill">휴식 ${esc(it.rest)}</span><span class="pill up">기준 ${it.target}회 채우면 +${fmt(it.inc)}kg</span></div>
+      <div class="ex-memo">${esc(it.memo)}</div>${startInput}
+    </div>`;
+  }).join('');
+  document.querySelectorAll('[data-start]').forEach(inp => inp.addEventListener('change', () => {
+    const v = inp.value.trim();
+    if (v === '') delete starts[inp.dataset.start]; else starts[inp.dataset.start] = Number(v);
+    store(K_START, starts);
+    renderRoutine(); fillWeight();
+    toast(v === '' ? '시작 무게를 지웠어요' : `시작 무게 ${fmt(Number(v))}kg 저장 ✓`);
+  }));
+}
+
+/* ── 기록 탭 ── */
+const fEx = document.getElementById('fEx'), fDate = document.getElementById('fDate'), fW = document.getElementById('fW');
+const fR = [1, 2, 3].map(i => document.getElementById('fR' + i));
+function today() { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function buildSelect() {
+  fEx.innerHTML = DAYS.map(d => `<optgroup label="${d.no} ${d.name}">` +
+    d.items.filter(i => i.id).map(i => `<option value="${i.id}">${esc(i.name)}</option>`).join('') + '</optgroup>').join('');
+  fEx.value = DAYS[nextDayIdx()].items.find(i => i.id).id;
+}
+function fillWeight() {
+  const w = currentWeight(fEx.value);
+  fW.value = w == null ? '' : fmt(w);
+  const ex = EX[fEx.value];
+  document.getElementById('fHint').textContent = `${ex.sets} · 3세트 모두 ${ex.target}회 이상이면 다음에 +${fmt(ex.inc)}kg`;
+}
+fEx.addEventListener('change', fillWeight);
+document.getElementById('saveBtn').addEventListener('click', () => {
+  const id = fEx.value;
+  const date = fDate.value || today();
+  const wStr = fW.value.trim();
+  const w = wStr === '' ? null : Number(wStr);
+  if (w != null && (isNaN(w) || w < 0)) { toast('무게를 확인해 주세요'); return; }
+  const reps = fR.map(i => i.value.trim() === '' ? null : Number(i.value));
+  if (reps.every(r => r == null)) { toast('세트별 횟수를 적어 주세요'); return; }
+  const { next, up } = calcNext(id, w, reps);
+  logs.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), ts: Date.now(), date, ex: id, w, reps, next, up });
+  if (!store(K_LOGS, logs)) { toast('저장하지 못했어요 (브라우저 저장소 확인)'); return; }
+  fR.forEach(i => i.value = '');
+  renderAll(false);
+  toast(next == null ? `${EX[id].name} 저장 ✓` : up ? `저장 ✓ 다음엔 ${fmt(next)}kg ▲` : `저장 ✓ 다음에도 ${fmt(next)}kg`);
+});
+function renderLogs() {
+  const el = document.getElementById('logList');
+  const s = sorted();
+  if (!s.length) { el.innerHTML = '<div class="empty">아직 기록이 없어요</div>'; return; }
+  el.innerHTML = s.map(l => {
+    const ex = EX[l.ex] || { name: l.ex };
+    const reps = l.reps.map(r => r == null ? '–' : r).join(' / ');
+    const nx = l.next == null ? '<div class="log-next">무게 없음</div>'
+      : `<div class="log-next${l.up ? ' up' : ''}">${l.up ? '▲ 증량' : '유지'}<b>${fmt(l.next)}kg</b></div>`;
+    return `<div class="log"><div class="log-main">
+      <div class="log-d">${l.date.replace(/-/g, '.')}</div>
+      <div class="log-n">${esc(ex.name)}</div>
+      <div class="log-r">${l.w == null ? '무게 없음' : fmt(l.w) + 'kg'} · ${reps}회</div>
+    </div>${nx}<button class="del" data-del="${l.id}" aria-label="삭제">✕</button></div>`;
+  }).join('');
+  el.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => {
+    if (!confirm('이 기록을 삭제할까요?')) return;
+    logs = logs.filter(l => l.id !== b.dataset.del);
+    store(K_LOGS, logs);
+    renderAll(false);
+    toast('기록을 삭제했어요');
+  }));
+}
+
+function renderAll(resetForm) {
+  viewDay = nextDayIdx();
+  renderRoutine();
+  if (resetForm) { buildSelect(); fDate.value = today(); }
+  fillWeight();
+  renderLogs();
+}
+
+/* ── toast ── */
+let tTimer;
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('on');
+  clearTimeout(tTimer); tTimer = setTimeout(() => t.classList.remove('on'), 2500);
+}
+
+renderAll(true);
+</script>
+</body>
+</html>
