@@ -416,6 +416,18 @@ function viewPhoto(i){
 }
 .ex-mus-menu button.on { background: var(--accent); color: var(--navy); border-color: var(--accent); }
 
+/* ── 운동 피드백 (rc-fb) ── */
+.rc-fb { margin-top: 22px; border-radius: var(--r); overflow: hidden; border: 1px solid var(--line); background: var(--white); }
+.rc-fb-top { background: var(--navy); color: #fff; padding: 14px; }
+.rc-fb-top .rc-k { margin-bottom: 6px; }
+.rc-fb-line { font-size: 13px; line-height: 1.6; color: rgba(255,255,255,0.85); }
+.rc-fb-line b { color: var(--accent); }
+.rc-fb-list { list-style: none; padding: 4px 14px 8px; margin: 0; }
+.rc-fb-list li { font-size: 12.5px; line-height: 1.55; padding: 8px 0; border-top: 1px solid var(--line); color: var(--text); }
+.rc-fb-list li:first-child { border-top: none; }
+.rc-fb-list li b { color: var(--navy); }
+.rc-fb-list .up { color: var(--green); font-weight: 600; }
+
 /* ── 오늘의 추천 운동 (rc-) ── */
 .rc-wrap { margin-top: 22px; }
 .rc-top { background: var(--navy); border-radius: var(--r) var(--r) 0 0; padding: 14px; color: #fff; }
@@ -627,9 +639,10 @@ function viewPhoto(i){
   <button class="save-btn" onclick="saveWorkout()">운동 저장 💪</button>
 
   <!-- 오늘의 추천 운동 (운동일지 wk_ 기록을 읽어서 추천, 따로 저장하지 않음) -->
+  <div id="rcFb"></div>
   <div class="rc-wrap" id="rcWrap">
     <div class="rc-top">
-      <div class="rc-k">💡 오늘의 추천 운동</div>
+      <div class="rc-k" id="rcK">💡 오늘의 추천 운동</div>
       <div class="rc-title"><div class="rc-part" id="rcPart"></div></div>
       <div class="rc-sub" id="rcSub"></div>
       <div class="rc-chips" id="rcChips"></div>
@@ -1475,8 +1488,9 @@ function saveWorkout(){
       loadWorkout();
     }
   } catch(e){}
-  updateStreak();
+  if (typeof updateStreak === 'function') updateStreak();
   toast('운동 저장 완료 💪  ' + data.at);
+  if (typeof RC !== 'undefined' && RC.afterSave) RC.afterSave(wkKey);
 }
 
 function loadWorkout(){
@@ -1733,10 +1747,13 @@ const RC = (function(){
   const num = v => { const n = parseFloat(v); return isNaN(n) ? null : n; };
   const todayStr = () => todayKey().slice(3).replace(/_/g, '-');
   const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 864e5);
+  const ymd = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  const addDays = (s, n) => { const d = new Date(s + 'T00:00:00'); d.setDate(d.getDate() + n); return ymd(d); };
+  const PAIN = /허리|통증|아프|아파|찢|중단|어지|띵|무릎|손목|어깨가|다침|다쳤|머리|깨질/;
 
   /* ── 운동일지 읽기 & 분석 ── */
-  function analyze(){
-    const today = todayStr(), days = [];
+  function analyze(cut){
+    const today = cut || todayStr(), days = [];
     try {
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
@@ -1792,7 +1809,6 @@ const RC = (function(){
     });
 
     // 메모에서 운동별 메모·통증 찾기
-    const PAIN = /허리|통증|아프|아파|찢|중단|어지|띵|무릎|손목|어깨가|다침|다쳤|머리|깨질/;
     days.forEach(day => {
       if (day.date >= today || !day.d.memo) return;
       let lastE = null;
@@ -1830,7 +1846,14 @@ const RC = (function(){
     return { days, hist, raws, notes, last, recent4w, isFull, doneParts, today };
   }
   let A = null;
-  function getA(){ if (!A) { A = analyze(); } return A; }
+  // 오늘 운동을 이미 저장했으면 오늘 기록까지 반영해서 "다음 운동"을 추천
+  function todayDone(){
+    try { const d = JSON.parse(localStorage.getItem('wk_' + todayKey()) || 'null'); return !!(d && (d.exercises || []).some(x => String(x.name || '').trim())); } catch(e) { return false; }
+  }
+  function getA(){
+    if (!A) { const next = todayDone(); A = analyze(next ? addDays(todayStr(), 1) : null); A.next = next; }
+    return A;
+  }
   function refresh(){ A = null; }
 
   function displayName(e, a){
@@ -1857,18 +1880,23 @@ const RC = (function(){
   }
 
   /* ── 추천 무게: 실제 기록(세트별 무게·횟수)으로 계산 ── */
+  // 세트 정리: 빈 무게는 앞 세트 무게로, 가장 많이 한 무게를 본세트로 (같으면 무거운 쪽)
+  function parseSets(sets, k){
+    // 무게·횟수 칸을 비워 두면 앞 세트와 같은 값으로 봄
+    let kg = null, rp = null;
+    const all = (sets || []).map(s => { const x = num(s.kg), y = num(s.reps); if (x != null) kg = x; if (y != null) rp = y; return { kg: x != null ? x : kg, reps: y != null ? y : rp }; })
+      .filter(s => s.kg != null || s.reps != null);
+    const ws = all.filter(s => s.kg != null);
+    const vol = all.reduce((t, s) => t + (s.kg != null && s.reps != null && k !== 'a' ? s.kg * s.reps : 0), 0);
+    if (!ws.length) return { w: null, reps: all.map(s => s.reps), all, vol };
+    const cnt = {}; ws.forEach(s => cnt[s.kg] = (cnt[s.kg] || 0) + 1);
+    const w = Object.keys(cnt).map(Number).sort((x, y) => cnt[y] - cnt[x] || (k === 'a' ? x - y : y - x))[0];
+    return { w, reps: ws.filter(s => s.kg === w).map(s => s.reps), all, vol };
+  }
   function sessions(e, a){
     return (a.hist[e.name] || []).map(h => {
-      let kg = null;
-      const sets = h.sets.map(s => { const k = num(s.kg); if (k != null) kg = k; return { kg: k != null ? k : kg, reps: num(s.reps) }; })
-        .filter(s => s.kg != null || s.reps != null);
-      const ws = sets.filter(s => s.kg != null);
-      if (!ws.length) return null;
-      // 가장 많이 한 무게를 본세트로 (같으면 무거운 쪽)
-      const cnt = {}; ws.forEach(s => cnt[s.kg] = (cnt[s.kg] || 0) + 1);
-      const w = Object.keys(cnt).map(Number).sort((x, y) => cnt[y] - cnt[x] || (e.k === 'a' ? x - y : y - x))[0];
-      const work = ws.filter(s => s.kg === w);
-      return { date: h.date, w, reps: work.map(s => s.reps), all: sets };
+      const p = parseSets(h.sets, e.k);
+      return p.w == null ? null : { date: h.date, w: p.w, reps: p.reps, all: p.all, vol: p.vol };
     }).filter(Boolean);
   }
   const roundTo = (v, step) => Math.max(0, Math.round(v / step) * step);
@@ -1969,8 +1997,9 @@ const RC = (function(){
     const a = getA(), auto = autoPart(a);
     if (resetPart || part == null) { part = auto.part; reroll = 0; }
     const P = PARTS[part];
+    document.getElementById('rcK').textContent = a.next ? '💡 다음 운동 추천' : '💡 오늘의 추천 운동';
     document.getElementById('rcPart').textContent = P.no + ' ' + P.name;
-    document.getElementById('rcSub').textContent = part === auto.part ? auto.why
+    document.getElementById('rcSub').textContent = part === auto.part ? (a.next ? '오늘 기록까지 반영했어요. ' : '') + auto.why
       : (part === FULL ? '전신이 끌리는 날! 순서는 그대로라 다음엔 ' : '직접 고른 부위예요. 자동 추천은 ') + PARTS[auto.part].no + ' ' + PARTS[auto.part].name + (part === FULL ? ' 차례예요.' : '');
     document.getElementById('rcChips').innerHTML = PARTS.map((p, i) =>
       `<div class="rc-chip${i === part ? ' on' : ''}" data-rc-part="${i}">${p.no} ${p.name}${i === auto.part ? ' ●' : ''}</div>`).join('');
@@ -2025,16 +2054,110 @@ const RC = (function(){
     render(false);
     toast(n ? n + '개 운동을 일지에 추가했어요 ↑' : '이미 모두 일지에 있어요');
   });
-  document.getElementById('pg-workout').addEventListener('click', ev => {
-    if (ev.target.closest('.save-btn')) setTimeout(() => render(false), 0);
-  });
+
+  /* ── 저장한 운동 피드백 (저장된 기록과 지난 기록을 비교, 규칙 기반) ── */
+  function feedback(date){
+    const aP = analyze(date), aN = analyze(addDays(date, 1));
+    const day = aP.days.find(d => d.date === date);
+    if (!day || !(day.d.exercises || []).some(x => String(x.name || '').trim())) return '';
+    const rows = [], tags = {};
+    let ups = 0, prs = 0, sets = 0, vol = 0, hasBig = false, hasSmall = false;
+    (day.d.exercises || []).forEach(x => {
+      const raw = String(x.name || '').trim();
+      if (!raw) return;
+      const e = canon(raw), p = parseSets(x.sets, e ? e.k : 'm');
+      sets += p.all.length; vol += p.vol;
+      const repsTxt = p.reps.map(r => r == null ? '–' : r).join('/');
+      if (!e) {
+        if (!SKIP.test(norm(raw)) && !/^pt/i.test(raw) && p.all.length) rows.push(`<li><b>${esc(raw)}</b> ${p.w != null ? fmt(p.w) + 'kg × ' : ''}${esc(repsTxt)}회 기록했어요</li>`);
+        return;
+      }
+      tags[tagOf(e)] = (tags[tagOf(e)] || 0) + 1;
+      if (e.group === 'big') hasBig = true; else hasSmall = true;
+      if (p.w == null) {
+        rows.push(`<li><b>${esc(raw)}</b> ${p.all.length ? esc(repsTxt) + '회 · ' : ''}무게를 적으면 다음 추천이 더 정확해져요</li>`);
+        return;
+      }
+      const S = sessions(e, aP), prev = S[0];
+      const lab = e.k === 'a' ? '보조 ' : '';
+      let comp, cls = '';
+      if (!prev) comp = '첫 기록이에요';
+      else {
+        const dw = (p.w - prev.w) * (e.k === 'a' ? -1 : 1);
+        // 세트 수가 같으면 총 횟수, 다르면 세트당 평균 횟수로 비교
+        const sum = r => r.reduce((t, v) => t + (v || 0), 0);
+        const dr = p.reps.length === prev.reps.length ? sum(p.reps) - sum(prev.reps)
+          : Math.round(sum(p.reps) / Math.max(1, p.reps.length) - sum(prev.reps) / Math.max(1, prev.reps.length));
+        if (dw > 0) { comp = `지난번보다 ${e.k === 'a' ? '보조 -' : '+'}${fmt(Math.abs(p.w - prev.w))}kg ▲`; cls = 'up'; ups++; }
+        else if (dw < 0) comp = `지난번(${lab}${fmt(prev.w)}kg)보다 가볍게`;
+        else if (dr > 0) { comp = `같은 무게로 ${p.reps.length === prev.reps.length ? '' : '세트당 '}${dr}회 더 ▲`; cls = 'up'; ups++; }
+        else if (dr < 0) comp = `같은 무게, 지난번보다 ${p.reps.length === prev.reps.length ? '' : '세트당 '}${-dr}회 적게`;
+        else comp = '지난번과 같아요';
+        const best = e.k === 'a' ? Math.min.apply(null, S.map(s => s.w)) : Math.max.apply(null, S.map(s => s.w));
+        if (e.k === 'a' ? p.w < best : p.w > best) { comp += ' · 🎉 최고 무게'; prs++; }
+      }
+      const sg = suggest(e, aN);
+      const nx = sg.w == null ? '' : sg.up ? ` → 다음엔 <b>${fmt(sg.w)}kg</b>` : ` → 다음에도 ${fmt(sg.w)}kg, ${sg.hi}회 목표`;
+      const warn = sg.note && sg.note.pain && sg.note.date === date ? ' (메모 때문에 무게 유지)' : '';
+      rows.push(`<li><b>${esc(raw)}</b> ${lab}${fmt(p.w)}kg × ${esc(repsTxt)}회 · <span class="${cls}">${comp}</span>${nx}${warn}</li>`);
+    });
+
+    // 세션 전체
+    const full = aP.isFull(day), dp = aP.doneParts(day);
+    const tagTxt = Object.keys(tags).map(k => k + ' ' + tags[k] + '개').join(' · ');
+    const lines = [];
+    lines.push(`${tagTxt ? tagTxt + ' · ' : ''}총 ${sets}세트${vol ? ' · 볼륨 ' + Math.round(vol).toLocaleString() + 'kg' : ''}`);
+    const sameParts = d => full ? aP.isFull(d) : !aP.isFull(d) && aP.doneParts(d).join() === dp.join();
+    const prevSame = dp.length || full ? aP.days.find(d => d.date < date && d.names.length && sameParts(d)) : null;
+    if (prevSame && vol) {
+      const pv = (prevSame.d.exercises || []).reduce((t, x) => { const e = canon(x.name); return t + (e ? parseSets(x.sets, e.k).vol : 0); }, 0);
+      // 지난 기록에 무게가 거의 없으면 비교하지 않음
+      if (pv > vol / 3 && pv < vol * 3) { const ch = Math.round((vol - pv) / pv * 100); lines.push(`지난 같은 부위 날(${prevSame.date.slice(5).replace('-', '/')})보다 볼륨 ${ch >= 0 ? '+' : ''}${ch}%`); }
+    }
+    lines.push(ups ? `지난번보다 늘어난 운동 ${ups}개${prs ? ', 최고 무게 ' + prs + '개' : ''}. 잘했어요!` : '무리하지 않고 꾸준히 이어 가는 게 제일 중요해요.');
+    if (sets > 24) lines.push(`세트가 많은 편이에요(${sets}세트). 20세트 안팎이면 충분해요.`);
+    if (!full && dp.length === 1 && dp[0] < 3) {
+      const P = PARTS[dp[0]];
+      if (!hasSmall) lines.push(`${P.smallTag} 운동이 빠졌어요. 다음엔 1~2개 넣어 보세요.`);
+      else if (!hasBig) lines.push(`${P.bigTag} 큰 운동이 빠졌어요. 다음엔 하나 넣어 보세요.`);
+    }
+    if (day.d.memo && PAIN.test(day.d.memo)) lines.push('⚠️ 메모에 불편한 곳이 적혀 있어요. 무리하지 말고, 계속 아프면 쉬거나 전문가와 상의해 주세요. 메모에 적은 운동은 다음 추천에서 무게를 올리지 않아요.');
+    // 이번 주 운동 횟수 (월요일부터)
+    const dt = new Date(date + 'T00:00:00'), mon = addDays(date, -((dt.getDay() + 6) % 7));
+    const wk = aN.days.filter(d => d.date >= mon && d.date <= date && (d.d.exercises || []).some(x => String(x.name || '').trim())).length;
+    lines.push(`이번 주 ${wk}번째 운동이에요 (목표 주 3회)${wk >= 3 ? ' · 이번 주 목표 달성 👏' : ''}`);
+    const nxp = autoPart(aN);
+    lines.push(`다음 차례는 <b>${PARTS[nxp.part].no} ${PARTS[nxp.part].name}</b>예요.`);
+
+    const when = date === todayStr() ? '오늘' : date.slice(5).replace('-', '/');
+    return `<div class="rc-fb">
+      <div class="rc-fb-top"><div class="rc-k">💬 ${when} 운동 피드백</div>${lines.map(l => `<div class="rc-fb-line">${l}</div>`).join('')}</div>
+      <ul class="rc-fb-list">${rows.join('')}</ul>
+    </div>`;
+  }
+  function renderFeedback(date){
+    const el = document.getElementById('rcFb');
+    if (!el) return '';
+    let html = '';
+    try { html = feedback(date || todayStr()); } catch(e) { html = ''; }
+    el.innerHTML = html;
+    return html;
+  }
+  function afterSave(key){
+    const m = String(key || '').match(/(\d{4})_(\d{2})_(\d{2})$/);
+    const date = m ? m[1] + '-' + m[2] + '-' + m[3] : todayStr();
+    const html = renderFeedback(date);
+    render(true);
+    if (html) setTimeout(() => { const el = document.getElementById('rcFb'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 50);
+  }
   document.querySelectorAll('.tab').forEach(t => {
     if (t.textContent.indexOf('운동') !== -1) t.addEventListener('click', () => render(true));
   });
 
-  return { render, _a: () => getA(), _suggest: name => suggest(ALL[name], getA()), _canon: canon };
+  return { render, afterSave, renderFeedback, _a: () => getA(), _suggest: name => suggest(ALL[name], getA()), _canon: canon };
 })();
 RC.render(true);
+RC.renderFeedback();
 </script>
 </body>
 </html>
