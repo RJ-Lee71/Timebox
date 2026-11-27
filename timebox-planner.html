@@ -428,6 +428,21 @@ function viewPhoto(i){
 .rc-fb-list li b { color: var(--navy); }
 .rc-fb-list .up { color: var(--green); font-weight: 600; }
 
+/* ── AI 코치 (rc-ai) ── */
+.rc-ai { border-top: 1px solid var(--line); padding: 12px 14px 14px; background: rgba(200,169,110,0.06); }
+.rc-ai-h { display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: 700; color: var(--navy); letter-spacing: 0.5px; margin-bottom: 6px; }
+.rc-ai-btns button, .rc-ai-go {
+  display: inline-block; text-decoration: none;
+  padding: 4px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--white); color: var(--navy);
+  font-family: 'DM Sans', sans-serif; font-size: 11px; font-weight: 700; cursor: pointer;
+}
+.rc-ai-off { font-size: 12px; color: var(--muted); }
+.rc-ai-off a { color: var(--navy); font-weight: 700; }
+.rc-ai-box { width: 100%; height: 160px; margin-top: 8px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; font-size: 11px; line-height: 1.5; background: var(--white); color: var(--text); resize: vertical; }
+.rc-ai-off { margin-bottom: 8px; line-height: 1.5; }
+.rc-ai-btns { display: flex; gap: 6px; margin-top: 6px; }
+.rc-ai-hint { font-size: 11px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+
 /* ── 오늘의 추천 운동 (rc-) ── */
 .rc-wrap { margin-top: 22px; }
 .rc-top { background: var(--navy); border-radius: var(--r) var(--r) 0 0; padding: 14px; color: #fff; }
@@ -1900,50 +1915,60 @@ const RC = (function(){
     }).filter(Boolean);
   }
   const roundTo = (v, step) => Math.max(0, Math.round(v / step) * step);
+  // 고립 운동: 무게보다 횟수·템포를 먼저 늘림
+  const isIso = e => e.group === 'small' || /익스텐션|레그 컬|펙덱|플라이|이너타이|킥백|레이즈|풀다운$/.test(e.name) && !/랫풀다운/.test(e.name);
+  /* 증량 규칙: 횟수 먼저(범위 맨 위를 모든 본세트에서 채우면) → 무게는 나중.
+     연달아 두 번 올리지 않고, 범위 아래로 계속 떨어지면 가볍게, 오래 쉬었거나 통증 메모가 있으면 올리지 않음 */
   function suggest(e, a){
-    const S = sessions(e, a), inc = INC[e.k], step = STEP[e.k];
-    const note = a.notes[e.name] || null;
+    const S = sessions(e, a), inc = INC[e.k], step = STEP[e.k], sign = e.k === 'a' ? -1 : 1;
+    const note = a.notes[e.name] || null, lo = e.lo, hi = e.hi;
     if (!S.length) {
       const n = (a.hist[e.name] || []).length;
-      if (e.start != null) return { w: e.start, lo: e.lo, hi: e.hi, why: '첫 기록 · 시작 무게', note };
-      return { w: null, lo: e.lo, hi: e.hi, why: n ? `${n}번 했지만 무게 기록이 없어요 · 마지막 2~3회가 힘든 무게로` : '첫 기록 · 마지막 2~3회가 힘든 무게로 가볍게 시작', note };
+      if (e.start != null) return { w: e.start, lo, hi, why: '첫 기록 · 시작 무게', next: `${fmt(e.start)}kg × ${lo}회부터`, note };
+      return { w: null, lo, hi, why: n ? `${n}번 했지만 무게 기록이 없어요 · 마지막 2~3회가 힘든 무게로` : '첫 기록 · 마지막 2~3회가 힘든 무게로 가볍게 시작', next: '', note };
     }
-    const L = S[0];
+    const L = S[0], P = S[1];
+    const lab = e.k === 'a' ? '보조 ' : '';
+    const kg = v => `${lab}${fmt(v)}kg`;
     const repsTxt = L.reps.map(r => r == null ? '–' : r).join('/');
     const R = L.reps.filter(r => r != null);
-    const hit = R.filter(r => r >= e.hi).length;
-    // 본세트 2개 이상, 그중 한 세트 정도 빼고 목표 횟수를 채웠으면 증량
-    const ok = R.length >= 2 && hit >= Math.max(2, R.length - 1);
-    const way = ok && R.every(r => r >= e.hi + 4);
-    const pain = note && note.pain;
-    let w = L.w, up = false, why, lo = e.lo, hi = e.hi;
-    const label = e.k === 'a' ? '보조 ' : '';
-    if (!R.length) {
-      why = `지난번 ${label}${fmt(L.w)}kg (횟수 기록 없음) → 같은 무게로 ${e.hi}회 목표`;
-    } else if (ok && pain) {
-      why = `지난번 ${label}${fmt(L.w)}kg × ${repsTxt}회 · 메모에 불편했던 기록이 있어 무게는 그대로, 자세 먼저`;
-    } else if (ok) {
-      w = L.w + inc; up = true;
-      why = `지난번 ${label}${fmt(L.w)}kg × ${repsTxt}회 → 목표 ${e.hi}회 ${way ? '넉넉히 ' : ''}채워서 ${e.k === 'a' ? '보조 ' + fmt(-inc) + 'kg 줄이기' : '+' + fmt(inc) + 'kg'}`;
-    } else {
-      // 정체: 같은 무게로 3번 이상 목표를 못 채움
-      const same = S.slice(0, 4).filter(s => s.w === L.w).length;
-      if (same >= 3) {
-        why = `${label}${fmt(L.w)}kg에서 ${same}번째 · 이번엔 세트마다 1회씩만 더 (${repsTxt}회 → ${e.hi}회 목표)`;
-      } else {
-        why = `지난번 ${label}${fmt(L.w)}kg × ${repsTxt}회 → 같은 무게로 ${e.hi}회 도전`;
-      }
-    }
-    // 오래 쉬었으면 살짝 가볍게
+    const top = s => { const r = s.reps.filter(x => x != null); return r.length >= 2 && r.every(x => x >= hi); };
+    const below = s => { const r = s.reps.filter(x => x != null); return r.length && r.filter(x => x < lo).length >= Math.ceil(r.length / 2); };
+    const res = (w, up, why, next) => ({ w: roundTo(w, step) || (e.k === 'a' ? 0 : w), up, why, next, lo, hi, note, times: S.length });
+
+    // 오래 쉬었으면: 3주 넘게 → 증량 없이, 6주 넘게 → 10% 가볍게
     const gap = daysBetween(L.date, a.today);
     if (gap > 42) {
-      w = e.k === 'a' ? L.w + 5 : Math.min(L.w, roundTo(L.w * 0.9, step)); up = false;
-      why = `${gap}일 만이라 지난번(${label}${fmt(L.w)}kg × ${repsTxt}회)보다 살짝 가볍게`;
-    } else if (gap > 21 && up) {
-      w = L.w; up = false;
-      why = `${gap}일 만이라 증량은 다음에, 지난번 무게 그대로 (${repsTxt}회 했었음)`;
+      const w = e.k === 'a' ? L.w + 5 : Math.min(L.w, roundTo(L.w * 0.9, step));
+      return res(w, false, `${gap}일 만이라 지난번(${kg(L.w)} × ${repsTxt}회)보다 살짝 가볍게`, `${kg(w)}로 가볍게 다시 시작`);
     }
-    return { w: roundTo(w, step) || (e.k === 'a' ? 0 : w), up, why, lo, hi, note, times: S.length };
+    if (!R.length) return res(L.w, false, `지난번 ${kg(L.w)} (횟수 기록 없음) → 같은 무게로 ${lo}~${hi}회`, `${kg(L.w)}로 ${lo}~${hi}회`);
+    if (note && note.pain) return res(L.w, false, `지난번 ${kg(L.w)} × ${repsTxt}회 · 메모에 불편했던 기록이 있어 무게는 그대로, 자세 먼저`, `${kg(L.w)} 그대로, 자세 먼저`);
+    if (gap > 21) return res(L.w, false, `${gap}일 만이라 증량 없이 지난번 무게 그대로 (${repsTxt}회 했었음)`, `${kg(L.w)} 그대로`);
+
+    // 범위 아래로 떨어짐: 한 번은 유지, 연속이면 가볍게(디로드)
+    if (below(L)) {
+      let n = 0; for (const s of S) { if (s.w === L.w && below(s)) n++; else break; }
+      if (n >= 2) {
+        const w = e.k === 'a' ? L.w + 5 : roundTo(L.w * 0.9, step);
+        return res(w, false, `${kg(L.w)}에서 ${n}번 연속 ${lo}회 미만 → 이번 주는 10% 가볍게 다시 쌓기`, `이번 주는 ${kg(w)}로 가볍게`);
+      }
+      return res(L.w, false, `지난번 ${kg(L.w)} × ${repsTxt}회 · 같은 무게로 ${lo}회부터 다시`, `${kg(L.w)}로 ${lo}회 채우기`);
+    }
+
+    // 범위 맨 위를 모든 본세트에서 채움
+    if (top(L)) {
+      const justUp = P && (L.w - P.w) * sign > 0;
+      if (justUp && !isIso(e)) return res(L.w, false, `방금 올린 ${kg(L.w)}에서 ${repsTxt}회 · 한 번 더 같은 무게로 확인하고 올려요`, `${kg(L.w)}로 한 번 더 확인`);
+      if (isIso(e) && !(P && P.w === L.w && top(P))) return res(L.w, false, `${kg(L.w)} × ${repsTxt}회 · 작은 운동이라 한 번 더 ${hi}회 채우면 올려요 (천천히 내리기)`, `${kg(L.w)}로 ${hi}회 한 번 더`);
+      const w = L.w + inc;
+      return res(w, true, `${kg(L.w)} × ${repsTxt}회로 ${hi}회를 다 채워서 ${e.k === 'a' ? '보조 ' + fmt(-inc) + 'kg 줄이기' : '+' + fmt(inc) + 'kg'} · 횟수는 ${lo}회부터`, `${kg(w)} × ${lo}회부터`);
+    }
+
+    // 범위 안: 같은 무게로 횟수 늘리기 (오래 막히면 템포)
+    let same = 0; for (const s of S) { if (s.w === L.w) same++; else break; }
+    if (same >= 4) return res(L.w, false, `${kg(L.w)}에서 ${same}번째 · 내릴 때 3초로 천천히, 세트마다 1회만 더 (${repsTxt} → ${hi}회 목표)`, `${kg(L.w)}로 천천히, ${hi}회 목표`);
+    return res(L.w, false, `지난번 ${kg(L.w)} × ${repsTxt}회 → 같은 무게로 세트마다 1~2회 더 (${hi}회 채우면 증량)`, `${kg(L.w)}로 ${hi}회 채우기`);
   }
 
   /* ── 운동 고르기: 날짜 시드 + 내 기록 기반 가중치 ── */
@@ -2097,7 +2122,7 @@ const RC = (function(){
         if (e.k === 'a' ? p.w < best : p.w > best) { comp += ' · 🎉 최고 무게'; prs++; }
       }
       const sg = suggest(e, aN);
-      const nx = sg.w == null ? '' : sg.up ? ` → 다음엔 <b>${fmt(sg.w)}kg</b>` : ` → 다음에도 ${fmt(sg.w)}kg, ${sg.hi}회 목표`;
+      const nx = sg.next ? ` → 다음엔 ${sg.up ? '<b>' + esc(sg.next) + '</b>' : esc(sg.next)}` : '';
       const warn = sg.note && sg.note.pain && sg.note.date === date ? ' (메모 때문에 무게 유지)' : '';
       rows.push(`<li><b>${esc(raw)}</b> ${lab}${fmt(p.w)}kg × ${esc(repsTxt)}회 · <span class="${cls}">${comp}</span>${nx}${warn}</li>`);
     });
@@ -2133,13 +2158,77 @@ const RC = (function(){
     return `<div class="rc-fb">
       <div class="rc-fb-top"><div class="rc-k">💬 ${when} 운동 피드백</div>${lines.map(l => `<div class="rc-fb-line">${l}</div>`).join('')}</div>
       <ul class="rc-fb-list">${rows.join('')}</ul>
+      ${aiHtml(date)}
     </div>`;
   }
+
+
+  /* ── 🤖 Claude에게 물어보기 (API·키 없이, 복사해서 claude.ai에 붙여 넣기) ── */
+  const COACH_PROMPT = [
+    '너는 헬스장 초중급자를 돕는 친근한 운동 코치야. 한국어로 답해.',
+    '나는 운동 1년 차이고 PT를 받고 있으며, PT 선생님이 부위별 분할(① 등·이두 → ② 가슴·삼두 → ③ 하체·어깨)을 권했어. 목표는 주 3회야.',
+    '아래 오늘 운동 기록과 최근 6주 기록, 앱이 규칙으로 계산한 다음 목표를 보고 짧게 피드백해 줘.',
+    '형식: 전체 5~8줄. 잘한 점 1~2개, 개선점 1~2개, 그리고 다음 운동에서 운동별 구체 목표(예: "스미스머신 스쿼트 40kg × 12회 3세트")를 줄마다 하나씩.',
+    '무게를 무조건 올리지 말고 횟수·자세·회복을 함께 봐 줘. 앱 계산값은 참고만 하고, 기록을 보고 더 맞다고 판단하면 조정해도 돼(조정했다면 짧게 이유).',
+    '메모에 통증·두통·어지러움 같은 말이 있으면 무리하지 말고 PT 선생님이나 전문가와 상의하라고 해 줘. 의학적 진단은 하지 마.',
+    '과장된 칭찬은 하지 말고, 기록에 있는 숫자를 근거로 말해 줘.'
+  ].join('\n');
+
+  function aiPayload(date){
+    const aP = analyze(date), aN = analyze(addDays(date, 1));
+    const day = aP.days.find(d => d.date === date);
+    const setTxt = sets => parseSets(sets, 'm').all.map(s => `${s.kg != null ? fmt(s.kg) + 'kg' : '무게없음'}×${s.reps != null ? s.reps : '?'}`).join(', ');
+    const L = [];
+    L.push(`[오늘 기록 ${date}]`);
+    (day.d.exercises || []).forEach(x => { const n = String(x.name || '').trim(), e = canon(n); if (n) L.push(`- ${n} (${e ? tagOf(e) : x.muscle || '부위 미정'}): ${setTxt(x.sets) || '세트 없음'}`); });
+    (day.d.cardio || []).forEach(c => { if (c && (c.time || c.dist)) L.push(`- 유산소 ${c.type || ''} ${c.time ? c.time + '분' : ''} ${c.dist ? c.dist + 'km' : ''}`.trim()); });
+    if (day.d.memo) L.push(`- 메모: ${String(day.d.memo).replace(/\s+/g, ' ').slice(0, 400)}`);
+    L.push('', '[앱이 규칙으로 계산한 다음 목표]');
+    (day.d.exercises || []).forEach(x => { const e = canon(x.name); if (!e) return; const s = suggest(e, aN); if (s.next) L.push(`- ${String(x.name).trim()}: ${s.next} (${s.why})`); });
+    L.push('', '[최근 6주 기록 (오늘 제외, 최신순)]');
+    const from = addDays(date, -42);
+    aP.days.filter(d => d.date < date && d.date >= from && (d.d.exercises || []).length).forEach(d => {
+      const ex = (d.d.exercises || []).map(x => {
+        const n = String(x.name || '').trim(); if (!n || /^pt/i.test(n)) return '';
+        const p = parseSets(x.sets, 'm');
+        return p.w != null ? `${n} ${fmt(p.w)}kg×${p.reps.map(r => r == null ? '?' : r).join('/')}` : `${n} ${p.reps.filter(r => r != null).join('/') || ''}`.trim();
+      }).filter(Boolean);
+      if (ex.length) L.push(`- ${d.date}: ${ex.join('; ')}${d.d.memo ? ' | 메모: ' + String(d.d.memo).replace(/\s+/g, ' ').slice(0, 120) : ''}`);
+    });
+    const nx = autoPart(aN);
+    L.push('', `[다음 차례 부위] ${PARTS[nx.part].no} ${PARTS[nx.part].name}`);
+    return L.join('\n');
+  }
+  const askText = date => COACH_PROMPT + '\n\n' + aiPayload(date);
+  let askShow = false;
+
+  // 링크(새 탭으로 claude.ai)가 열리는 그 클릭 안에서 바로 복사를 시작해서, 팝업 차단 없이 동작
+  function askClaude(date){
+    const text = askText(date);
+    const fail = () => { askShow = true; renderFeedback(date); toast('자동 복사가 안 돼서 아래 글을 직접 복사해 주세요'); };
+    try {
+      navigator.clipboard.writeText(text).then(() => toast('복사했어요 · Claude 새 대화에 붙여 넣어 주세요'), fail);
+    } catch(e) { fail(); }
+  }
+
+  function aiHtml(date){
+    const box = askShow ? `<textarea class="rc-ai-box" readonly>${esc(askText(date))}</textarea>
+      <div class="rc-ai-btns"><button data-ai="selall">전체 선택</button></div>
+      <div class="rc-ai-hint">전체 선택 → 복사한 뒤 <a href="https://claude.ai/new" target="_blank" rel="noopener">claude.ai</a>에 붙여 넣어 주세요.</div>` : '';
+    return `<div class="rc-ai">
+      <div class="rc-ai-h">🤖 AI 코치에게 물어보기</div>
+      <div class="rc-ai-off">오늘 기록과 최근 6주 기록을 정리해서 복사하고 Claude를 열어요. 새 대화에 붙여 넣으면 쓰시는 Claude Pro로 피드백을 받아요(추가 비용 없음).</div>
+      <div class="rc-ai-btns"><a class="rc-ai-go" data-ai="ask" href="https://claude.ai/new" target="_blank" rel="noopener">📋 복사하고 Claude 열기</a><button data-ai="show">${askShow ? '글 숨기기' : '보낼 글 보기'}</button></div>
+      ${box}
+    </div>`;
+  }
+  let fbDate = null;
   function renderFeedback(date){
     const el = document.getElementById('rcFb');
     if (!el) return '';
     let html = '';
-    try { html = feedback(date || todayStr()); } catch(e) { html = ''; }
+    fbDate = date || todayStr();
+    try { html = feedback(fbDate); } catch(e) { html = ''; }
     el.innerHTML = html;
     return html;
   }
@@ -2154,7 +2243,16 @@ const RC = (function(){
     if (t.textContent.indexOf('운동') !== -1) t.addEventListener('click', () => render(true));
   });
 
-  return { render, afterSave, renderFeedback, _a: () => getA(), _suggest: name => suggest(ALL[name], getA()), _canon: canon };
+  document.getElementById('rcFb').addEventListener('click', ev => {
+    const b = ev.target.closest('[data-ai]');
+    if (!b || !fbDate) return;
+    if (b.dataset.ai === 'ask') { askClaude(fbDate); return; }   // 링크는 그대로 열리게 둠
+    ev.preventDefault();
+    if (b.dataset.ai === 'show') { askShow = !askShow; renderFeedback(fbDate); }
+    else if (b.dataset.ai === 'selall') { const ta = document.querySelector('.rc-ai-box'); if (ta) { ta.focus(); ta.select(); ta.setSelectionRange(0, ta.value.length); } }
+  });
+
+  return { render, afterSave, renderFeedback, _askText: d => askText(d), _a: () => getA(), _suggest: name => suggest(ALL[name], getA()), _canon: canon };
 })();
 RC.render(true);
 RC.renderFeedback();
