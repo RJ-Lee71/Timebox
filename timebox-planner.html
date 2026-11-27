@@ -402,6 +402,20 @@ function viewPhoto(i){
 .bnav-lbl { font-size: 10px; font-weight: 600; color: var(--muted); letter-spacing: 0.3px; }
 .bnav-btn.on .bnav-lbl { color: var(--navy); }
 
+/* ── 운동 카드 부위 라벨 ── */
+.ex-mus {
+  font-size: 10px; font-weight: 700; color: var(--accent); letter-spacing: 1px; cursor: pointer;
+  padding: 2px 7px; border: 1px dashed rgba(200,169,110,0.5); border-radius: 10px;
+}
+.ex-mus::after { content: ' ▾'; font-size: 8px; }
+.ex-mus-menu { display: flex; flex-wrap: wrap; gap: 5px; margin: 8px 0 4px; }
+.ex-mus-menu button {
+  padding: 4px 10px; border-radius: 14px; font-size: 11px; font-weight: 600; cursor: pointer;
+  background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.75); border: 1px solid rgba(255,255,255,0.18);
+  font-family: 'DM Sans', sans-serif;
+}
+.ex-mus-menu button.on { background: var(--accent); color: var(--navy); border-color: var(--accent); }
+
 /* ── 오늘의 추천 운동 (rc-) ── */
 .rc-wrap { margin-top: 22px; }
 .rc-top { background: var(--navy); border-radius: var(--r) var(--r) 0 0; padding: 14px; color: #fff; }
@@ -1077,14 +1091,12 @@ function editWorkout(y,m,d){
   photos = [];
   renderPhotos();
 
-  // 데이터 채우기
-  if(data.muscle){
-    wkMuscle = data.muscle;
-    document.querySelectorAll('.mg-tag').forEach(t=>{
-      t.classList.remove('on');
-      if(t.textContent === wkMuscle) t.classList.add('on');
-    });
-  }
+  // 데이터 채우기 (다른 날 부위가 남지 않게 그날 값으로 초기화)
+  wkMuscle = data.muscle || '';
+  document.querySelectorAll('.mg-tag').forEach(t=>{
+    t.classList.remove('on');
+    if(wkMuscle && t.textContent === wkMuscle) t.classList.add('on');
+  });
   if(data.exercises) data.exercises.forEach(ex => addExercise(ex));
   if(data.cardio && Array.isArray(data.cardio)) data.cardio.forEach(cd => addCardio(cd));
   if(data.memo) document.getElementById('wkMemo').value = data.memo;
@@ -1358,7 +1370,7 @@ function addExercise(data){
   div.id = id;
   div.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center">
-      <span style="font-size:10px;font-weight:700;color:var(--accent);letter-spacing:1px">${wkMuscle||'운동'}</span>
+      <span class="ex-mus" onclick="pickExMuscle(this)" title="눌러서 부위 바꾸기">${data?.muscle||wkMuscle||'운동'}</span>
       <button class="ex-del-btn" onclick="document.getElementById('${id}').remove()">✕ 삭제</button>
     </div>
     <input class="ex-name" placeholder="운동 이름 (예: 벤치프레스)" value="${data?.name||''}">
@@ -1378,6 +1390,22 @@ function addExercise(data){
   // 기존 데이터 세트 복원 or 기본 1세트
   const sets = data?.sets || [{}];
   sets.forEach(s => addSet('sets_'+id, s));
+}
+
+/* 운동 카드 부위 라벨을 눌러 바꾸기 */
+function pickExMuscle(span){
+  const old = document.getElementById('exMusMenu');
+  if(old){ const same = old._for === span; old.remove(); if(same) return; }
+  const menu = document.createElement('div');
+  menu.id = 'exMusMenu'; menu.className = 'ex-mus-menu'; menu._for = span;
+  ['가슴','등','하체','어깨','팔','복근','전신'].forEach(m=>{
+    const b = document.createElement('button');
+    b.type = 'button'; b.textContent = m;
+    if(m === span.textContent) b.className = 'on';
+    b.onclick = ev => { ev.stopPropagation(); span.textContent = m; menu.remove(); toast('부위를 ' + m + '(으)로 바꿨어요 · 운동 저장을 눌러 주세요'); };
+    menu.appendChild(b);
+  });
+  span.closest('.ex-card').insertBefore(menu, span.parentNode.nextSibling);
 }
 
 function addSet(containerId, data){
@@ -1437,6 +1465,14 @@ function saveWorkout(){
       window._wkEditKey = null;
       document.getElementById('wkDate').textContent =
         `${NOW.getMonth()+1}월 ${NOW.getDate()}일 (${DOWS[NOW.getDay()]}) 운동일지`;
+      // 편집한 날 내용이 오늘 일지에 남지 않게 오늘 기록으로 다시 채우기
+      exerciseCount = 0; cardioCount = 0;
+      document.getElementById('exerciseList').innerHTML = '';
+      document.getElementById('cardioList').innerHTML = '';
+      document.getElementById('cardioEmpty').style.display = 'block';
+      document.getElementById('wkMemo').value = '';
+      photos = []; renderPhotos();
+      loadWorkout();
     }
   } catch(e){}
   updateStreak();
@@ -1447,13 +1483,18 @@ function loadWorkout(){
   const wkKey = 'wk_' + todayKey();
   try {
     const raw = localStorage.getItem(wkKey);
-    if(!raw) return;
+    if(!raw){
+      wkMuscle = '';
+      document.querySelectorAll('.mg-tag').forEach(t=>t.classList.remove('on'));
+      return;
+    }
     const data = JSON.parse(raw);
     if(data.memo) document.getElementById('wkMemo').value = data.memo;
     if(data.cardio && Array.isArray(data.cardio)){
       data.cardio.forEach(cd => addCardio(cd));
     }
-    if(data.muscle){ wkMuscle = data.muscle; document.querySelectorAll('.mg-tag').forEach(t=>{ if(t.textContent===wkMuscle) t.classList.add('on'); }); }
+    wkMuscle = data.muscle || '';
+    document.querySelectorAll('.mg-tag').forEach(t=>{ t.classList.remove('on'); if(wkMuscle && t.textContent===wkMuscle) t.classList.add('on'); });
     if(data.photos){ photos = data.photos; renderPhotos(); }
     if(data.exercises) data.exercises.forEach(ex => addExercise(ex));
   } catch(e){}
@@ -1733,7 +1774,14 @@ const RC = (function(){
       (day.d.exercises || []).forEach(x => {
         const raw = String(x.name || '').trim();
         const e = canon(raw);
-        if (!e) return;
+        if (!e) {
+          // 모르는 운동은 그 운동에 적힌 부위 태그로만 부위 판단에 보탬 (워밍업·PT 등은 제외)
+          const n = norm(raw), t = x.muscle || '';
+          if (!n || SKIP.test(n) || /^pt/i.test(raw)) return;
+          const p = t === '등' ? 0 : t === '가슴' ? 1 : (t === '하체' || t === '어깨') ? 2 : t === '팔' ? (/삼두|푸쉬|푸시|익스텐션|킥백/.test(n) ? 1 : 0) : -1;
+          if (p !== -1) day.parts[p] += 0.5;
+          return;
+        }
         day.names.push(e.name);
         day.parts[e.part]++;
         if (day.date < today) {
@@ -1765,7 +1813,14 @@ const RC = (function(){
     });
 
     // 부위별 마지막 날짜 (세 부위가 다 섞인 날 = 전신, 순서 계산에서 제외)
-    const isFull = day => day.parts.every(c => c > 0);
+    // 아는 운동 이름도, 운동별 태그도 없으면 마지막으로 그날 부위 태그를 봄
+    days.forEach(day => {
+      if (day.parts.some(c => c > 0)) return;
+      const t = day.d.muscle || '';
+      const p = t === '등' ? 0 : t === '가슴' ? 1 : (t === '하체' || t === '어깨') ? 2 : -1;
+      if (p !== -1 && (day.d.exercises || []).length) day.parts[p] = 1;
+    });
+    const isFull = day => day.parts.every(c => c >= 1);
     const doneParts = day => isFull(day) ? [] : day.parts.map((c, i) => c >= 2 || (c >= 1 && day.parts.filter(x => x > 0).length === 1) ? i : -1).filter(i => i !== -1);
     const last = [null, null, null], recent4w = [0, 0, 0];
     days.forEach(day => {
@@ -1944,10 +1999,7 @@ const RC = (function(){
 
   function addOne(s){
     if (journalNames().indexOf(norm(s.dn)) !== -1) return false;
-    const keep = wkMuscle;
-    wkMuscle = tagOf(s.e);   // 카드 라벨용
-    addExercise({ name: s.dn, sets: [1, 2, 3].map(() => ({ kg: s.w == null ? '' : fmt(s.w), reps: s.lo })) });
-    wkMuscle = keep;
+    addExercise({ name: s.dn, muscle: tagOf(s.e), sets: [1, 2, 3].map(() => ({ kg: s.w == null ? '' : fmt(s.w), reps: s.lo })) });
     return true;
   }
   function setMainTag(){
