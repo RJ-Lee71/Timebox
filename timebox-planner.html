@@ -441,6 +441,10 @@ function viewPhoto(i){
   font-family: 'DM Sans', sans-serif; font-size: 11px; font-weight: 700; cursor: pointer;
 }
 .rc-add.done { background: var(--bg2); color: var(--muted); cursor: default; }
+.rc-alt { display: block; font-size: 11px; font-weight: 500; color: var(--muted); }
+.rc-pill.mine { background: rgba(74,124,89,0.12); color: var(--green); }
+.rc-memo { margin-top: 6px; padding: 6px 9px; border-radius: 8px; background: var(--bg2); font-size: 11px; color: var(--muted); line-height: 1.5; }
+.rc-memo.pain { background: rgba(220,80,50,0.08); color: #b03a20; }
 </style>
 </head>
 <body>
@@ -1587,184 +1591,327 @@ function importData(input){
 /* ── init ── */
 load();
 
-/* ── 오늘의 추천 운동 (rc-) : 운동일지(wk_) 기록을 읽어 추천만 함 ── */
+/* ── 오늘의 추천 운동 (rc-) ──
+   운동일지(wk_) 기록을 브라우저에서 읽어 맞춤 추천을 계산해요. 기록은 일지에만 저장되고, 여기서는 읽기만 해요. */
 const RC = (function(){
-  // b: 바벨(+2.5) / m: 머신(+5) / c: 케이블(+2.5) / d: 덤벨(+2) / d1: 가벼운 덤벨(+1)
-  const INC = { b: 2.5, m: 5, c: 2.5, d: 2, d1: 1 };
-  const E = (name, k, lo, hi, rest, tip, start) => ({ name, k, lo, hi, rest, tip, start: start == null ? null : start });
+  // 증량 단위 · 반올림 단위. b 바벨 / m 머신 / c 케이블 / d 덤벨 / d1 가벼운 덤벨 / a 보조(어시스트) 머신
+  const INC = { b: 2.5, m: 5, c: 2.5, d: 2, d1: 1, a: -5 };
+  const STEP = { b: 2.5, m: 2.5, c: 2.5, d: 0.5, d1: 0.5, a: 2.5 };
+  // E(이름, 종류, 최소 횟수, 목표 횟수, 휴식, 팁, 시작 무게, 흔한 다른 이름들)
+  const E = (name, k, lo, hi, rest, tip, start, alias) => ({ name, k, lo, hi, rest, tip, start: start == null ? null : start, alias: alias || [] });
   const PARTS = [
-    { no: '①', name: '등·이두', tags: ['등', '팔'], bigTag: '등', smallTag: '팔',
+    { no: '①', name: '등·이두', bigTag: '등', smallTag: '팔',
       warm: '실내자전거 3분 + 가벼운 랫풀다운 15회', cool: '등·팔 스트레칭 3분',
       big: [
-        E('랫풀다운', 'm', 10, 12, '90초', '가슴 위쪽으로 당기고 반동 없이'),
-        E('시티드 케이블 로우', 'c', 10, 12, '90초', '허리 세우고 팔꿈치를 뒤로 당기기'),
-        E('원암 덤벨 로우', 'd', 10, 12, '60초', '벤치에 한 손·한 무릎 짚고, 한쪽씩'),
-        E('티바 로우', 'b', 8, 10, '2분', '가슴을 패드에 붙이고 등을 곧게'),
-        E('스트레이트암 풀다운', 'c', 12, 15, '60초', '팔을 거의 편 채로 허벅지까지 내리기'),
-        E('바벨 로우', 'b', 8, 10, '2분', '상체 45도 숙이고 허리 둥글게 말지 않기'),
-        E('체스트 서포티드 머신 로우', 'm', 10, 12, '90초', '가슴을 패드에 대고 날개뼈 모으기'),
-        E('와이드 그립 랫풀다운', 'm', 10, 12, '90초', '어깨 으쓱하지 말고 팔꿈치를 아래로')
+        E('랫풀다운', 'm', 10, 12, '90초', '가슴 위쪽으로 당기고 반동 없이', null, ['렛풀다운', '랫풀']),
+        E('시티드 케이블 로우', 'c', 10, 12, '90초', '허리 세우고 팔꿈치를 뒤로 당기기', null, ['시티드로우', '시티드케이블', '롱풀', '케이블로우']),
+        E('어시스트 풀업', 'a', 8, 10, '90초', '보조 무게는 클수록 쉬워요. 숨 참지 말고 내쉬면서 올라가기', null, ['어시스트풀업', '풀업어시스트', '어시풀업', '풀업', '턱걸이']),
+        E('바벨 로우', 'b', 10, 12, '2분', '상체 45도, 허리 둥글게 말지 않기', null, ['바벨로우', '스미스머신바벨로우']),
+        E('데드리프트', 'b', 6, 8, '2분', '복대·거울 확인, 허리 곧게. 마지막 세트도 자세가 무너지면 바로 멈추기', null, ['데드리프트', '데드리프크', '데드']),
+        E('원암 덤벨 로우', 'd', 10, 12, '60초', '벤치에 한 손·한 무릎 짚고, 한쪽씩', null, ['덤벨로우']),
+        E('스트레이트암 풀다운', 'c', 12, 15, '60초', '팔을 거의 편 채로 허벅지까지 내리기', null, ['암풀다운', '케이블암풀다운']),
+        E('티바 로우', 'b', 8, 10, '2분', '가슴을 패드에 붙이고 등을 곧게', null, ['티바로우']),
+        E('체스트 서포티드 머신 로우', 'm', 10, 12, '90초', '가슴을 패드에 대고 날개뼈 모으기', null, ['머신로우'])
       ],
       small: [
-        E('덤벨 컬', 'd1', 10, 12, '60초', '팔꿈치 고정, 천천히 내리기'),
-        E('해머 컬', 'd1', 10, 12, '60초', '엄지가 위로 향하게'),
-        E('케이블 컬', 'c', 12, 15, '60초', '몸을 흔들지 말고 팔꿈치 고정'),
-        E('프리처 컬 머신', 'm', 10, 12, '60초', '끝까지 펴되 팔꿈치가 꺾이지 않게'),
-        E('EZ바 컬', 'b', 10, 12, '60초', '허리 반동 없이 천천히')
+        E('바벨 컬', 'b', 10, 12, '60초', '허리 반동 없이 천천히', null, ['바벨컬', 'ez바컬', '이지바컬']),
+        E('덤벨 컬', 'd1', 10, 12, '60초', '팔꿈치 고정, 천천히 내리기', null, ['덤벨컬', '이두컬']),
+        E('해머 컬', 'd1', 10, 12, '60초', '엄지가 위로 향하게', null, ['해머컬']),
+        E('케이블 컬', 'c', 12, 15, '60초', '몸을 흔들지 말고 팔꿈치 고정', null, ['케이블컬', '케이블업']),
+        E('프리처 컬 머신', 'm', 10, 12, '60초', '끝까지 펴되 팔꿈치가 꺾이지 않게', null, ['프리처컬'])
       ] },
-    { no: '②', name: '가슴·삼두', tags: ['가슴'], bigTag: '가슴', smallTag: '팔',
+    { no: '②', name: '가슴·삼두', bigTag: '가슴', smallTag: '팔',
       warm: '실내자전거 3분 + 빈 봉 벤치프레스 10회', cool: '가슴·삼두 스트레칭 3분',
       big: [
-        E('바벨 벤치프레스', 'b', 8, 10, '2분', '세이프티 바 맞추고 날개뼈 모으기'),
-        E('덤벨 벤치프레스', 'd', 8, 10, '90초', '내릴 때 팔꿈치 45도, 천천히'),
-        E('인클라인 덤벨 프레스', 'd', 10, 12, '90초', '벤치 각도 30~45도'),
-        E('체스트 프레스 머신', 'm', 10, 12, '90초', '손잡이를 가슴 중간 높이에 맞추기'),
-        E('인클라인 체스트 프레스 머신', 'm', 10, 12, '90초', '어깨가 앞으로 말리지 않게'),
-        E('펙덱 플라이', 'm', 12, 15, '60초', '가슴이 늘어나는 느낌으로 천천히'),
-        E('케이블 크로스오버', 'c', 12, 15, '60초', '팔꿈치 살짝 굽힌 채 안아 주듯이'),
-        E('덤벨 플라이', 'd', 12, 15, '60초', '너무 깊이 내리지 않기')
+        E('바벨 벤치프레스', 'b', 8, 10, '2분', '세이프티 바 맞추고 날개뼈 모으기, 가슴까지 충분히 내리기', null, ['벤치프레스', '스미스머신벤치프레스', '벤치프레스스미스머신']),
+        E('덤벨 벤치프레스', 'd', 8, 10, '2분', '내릴 때 팔꿈치 45도, 세트 사이 충분히 쉬기', null, ['덤벨프레스', '플랫덤벨프레스', '덤벨벤치']),
+        E('인클라인 덤벨 프레스', 'd', 10, 12, '90초', '벤치 각도 30~45도', null, ['인클라인덤벨프레스', '인클라인덤벨프레수', '덤벨프레스인클라인', '인클라인']),
+        E('인클라인 바벨 프레스', 'b', 8, 10, '2분', '벤치 각도 30도, 쇄골 아래로 내리기', null, ['인클라인바벨프레스', '인클라인벤치프레스', '인클라인바벨']),
+        E('체스트 프레스 머신', 'm', 10, 12, '90초', '손잡이를 가슴 중간 높이에 맞추기', null, ['체스트프레스', '체스트프레스머신']),
+        E('펙덱 플라이', 'm', 12, 15, '60초', '가슴이 늘어나는 느낌으로 천천히', null, ['펙덱']),
+        E('케이블 플라이', 'c', 12, 15, '60초', '팔꿈치 살짝 굽힌 채 안아 주듯이', null, ['케이블플라이', '케이블크로스오버']),
+        E('덤벨 플라이', 'd', 12, 15, '60초', '너무 깊이 내리지 않기', null, ['덤벨플라이'])
       ],
       small: [
-        E('케이블 푸시다운', 'c', 12, 15, '60초', '팔꿈치를 옆구리에 고정'),
-        E('로프 푸시다운', 'c', 12, 15, '60초', '끝에서 로프를 양옆으로 벌리기'),
-        E('오버헤드 덤벨 익스텐션', 'd', 12, 15, '60초', '덤벨 하나를 양손으로 잡고'),
-        E('케이블 오버헤드 익스텐션', 'c', 12, 15, '60초', '팔꿈치가 벌어지지 않게'),
-        E('덤벨 킥백', 'd1', 12, 15, '60초', '상체 숙이고 팔꿈치 높이 고정')
+        E('케이블 푸시다운', 'c', 12, 15, '60초', '팔꿈치를 옆구리에 고정', null, ['케이블푸시다운', '케이블푸쉬다운', '푸쉬다운', '푸시다운']),
+        E('로프 푸시다운', 'c', 12, 15, '60초', '끝에서 로프를 양옆으로 벌리기', null, ['로프푸시다운', '로프푸쉬다운', '삼두로프']),
+        E('오버헤드 덤벨 익스텐션', 'd', 12, 15, '60초', '덤벨 하나를 양손으로 잡고', null, ['덤벨오버헤드', '오버헤드익스텐션']),
+        E('케이블 오버헤드 익스텐션', 'c', 12, 15, '60초', '팔꿈치가 벌어지지 않게', null, ['케이블오버헤드']),
+        E('덤벨 킥백', 'd1', 12, 15, '60초', '상체 숙이고 팔꿈치 높이 고정', null, ['킥백']),
+        E('딥스', 'm', 8, 12, '90초', '어깨가 귀 쪽으로 올라가지 않게, 너무 깊이 내리지 않기', null, ['딥스', '어시스트딥스', '딥스머신'])
       ] },
-    { no: '③', name: '하체·어깨', tags: ['하체', '어깨'], bigTag: '하체', smallTag: '어깨',
+    { no: '③', name: '하체·어깨', bigTag: '하체', smallTag: '어깨',
       warm: '실내자전거 3분 → 빈 봉 스쿼트 10회 → 본세트 무게의 70%로 5회', cool: '허벅지 앞·뒤, 엉덩이 스트레칭 3분',
       big: [
-        E('바벨 스쿼트', 'b', 8, 10, '2분', '세이프티 바 필수, 무릎은 발끝 방향', 40),
-        E('레그프레스', 'm', 10, 12, '75초', '무릎을 끝까지 펴서 잠그지 않기'),
-        E('레그 익스텐션', 'm', 12, 15, '60초', '무릎을 기계 회전축에 맞추기'),
-        E('레그 컬', 'm', 12, 15, '60초', '내릴 때 천천히'),
-        E('덤벨 루마니안 데드리프트', 'd', 10, 12, '90초', '허리 곧게, 엉덩이를 뒤로 빼며 내리기'),
-        E('고블릿 스쿼트', 'd', 10, 12, '75초', '덤벨을 가슴 앞에 붙이고 상체 세우기'),
-        E('핵 스쿼트 머신', 'm', 10, 12, '90초', '발 전체로 밀고 무릎 잠그지 않기'),
-        E('힙 쓰러스트 머신', 'm', 10, 12, '75초', '위에서 엉덩이 1초 조이기'),
-        E('덤벨 워킹 런지', 'd', 10, 12, '75초', '한쪽 10걸음씩, 앞무릎이 발끝 방향')
+        E('바벨 스쿼트', 'b', 8, 10, '2분', '세이프티 바 필수, 무릎은 발끝 방향', 40, ['바벨스쿼트', '스쿼트']),
+        E('스미스머신 스쿼트', 'b', 10, 12, '2분', '발을 살짝 앞에 두고, 무거우면 복대', null, ['스미스머신스쿼트', '스머스머신스쿼트', '스미스스쿼트']),
+        E('레그프레스', 'm', 10, 12, '75초', '무릎을 끝까지 펴서 잠그지 않기', null, ['레그프레스']),
+        E('레그 익스텐션', 'm', 12, 15, '60초', '무릎을 기계 회전축에 맞추기', null, ['레그익스텐션']),
+        E('레그 컬', 'm', 12, 15, '60초', '내릴 때 천천히', null, ['레그컬']),
+        E('이너타이 머신', 'm', 12, 15, '60초', '허벅지 안쪽으로 천천히 모으기', null, ['이너타이', '내전근', '다리모으는']),
+        E('불가리안 스플릿 스쿼트', 'd', 10, 12, '75초', '앞무릎이 발끝 방향, 한쪽씩', null, ['불가리안스플릿스쿼트', '불가리안']),
+        E('덤벨 루마니안 데드리프트', 'd', 10, 12, '90초', '허리 곧게, 엉덩이를 뒤로 빼며 내리기', null, ['루마니안데드리프트', '루마니안']),
+        E('고블릿 스쿼트', 'd', 10, 12, '75초', '덤벨을 가슴 앞에 붙이고 상체 세우기', null, ['고블릿스쿼트', '고블린스쿼트']),
+        E('힙 쓰러스트 머신', 'm', 10, 12, '75초', '위에서 엉덩이 1초 조이기', null, ['힙쓰러스트'])
       ],
       small: [
-        E('사이드 레터럴 레이즈', 'd1', 12, 15, '45초', '가볍게, 어깨 높이까지만'),
-        E('리어델트 머신', 'm', 12, 15, '45초', '펙덱 머신에 거꾸로 앉아서'),
-        E('덤벨 숄더 프레스', 'd', 10, 12, '90초', '허리 젖히지 말고 귀 옆까지 내리기'),
-        E('숄더 프레스 머신', 'm', 10, 12, '90초', '손잡이를 어깨 높이에 맞추기'),
-        E('페이스풀', 'c', 12, 15, '45초', '로프를 얼굴 쪽으로, 팔꿈치는 높게'),
-        E('케이블 레터럴 레이즈', 'c', 12, 15, '45초', '한쪽씩, 천천히 내리기')
+        E('사이드 레터럴 레이즈', 'd1', 12, 15, '45초', '가볍게, 어깨 높이까지만', null, ['사레레', '사이드레터럴레이즈', '레터럴레이즈']),
+        E('숄더 프레스 머신', 'm', 10, 12, '90초', '손잡이를 어깨 높이에 맞추기', null, ['숄더프레스머신', '머신숄더프레스', '숄더프리스머신', '숄더프레스']),
+        E('바벨 숄더 프레스', 'b', 8, 10, '2분', '허리 젖히지 말고 턱 앞으로 지나가게', null, ['바벨숄더프레스', '숄더바벨프레스', '오버헤드프레스']),
+        E('덤벨 숄더 프레스', 'd', 10, 12, '90초', '허리 젖히지 말고 귀 옆까지 내리기', null, ['덤벨숄더프레스', '숄더덤벨프레스', '덤벨숄더프래스']),
+        E('리어델트 머신', 'm', 12, 15, '45초', '펙덱 머신에 거꾸로 앉아서', null, ['리어델트']),
+        E('페이스풀', 'c', 12, 15, '45초', '로프를 얼굴 쪽으로, 팔꿈치는 높게', null, ['페이스풀']),
+        E('케이블 레터럴 레이즈', 'c', 12, 15, '45초', '한쪽씩, 천천히 내리기', null, ['케이블레터럴'])
       ] }
   ];
-  const ALL = {};
-  PARTS.forEach((p, pi) => ['big', 'small'].forEach(g => p[g].forEach(e => { e.part = pi; e.group = g; ALL[e.name] = e; })));
-  // ④ 전신: 직접 눌렀을 때만. 위 후보에서 하체1 + 밀기1 + 당기기1 + 어깨·팔2
   const FULL = 3;
-  PARTS.push({ no: '④', name: '전신', tags: ['전신'], bigTag: '전신', smallTag: '전신', full: true,
+  PARTS.push({ no: '④', name: '전신', bigTag: '전신', smallTag: '전신',
     warm: '실내자전거 3분 + 첫 운동을 가벼운 무게로 10회', cool: '전신 스트레칭 3분 (허벅지·엉덩이·가슴·등)' });
+
+  /* ── 이름 정리: 공백·괄호·PT 표시를 빼고 흔한 다른 이름을 하나로 묶기 ── */
+  const norm = s => String(s || '').toLowerCase().replace(/\(.*?\)/g, '').replace(/[\s\-_.·,]/g, '').replace(/pt$/, '');
+  const SKIP = /워밍업|스트레칭|플랭크|코어|밴드|이완|^pt|^케이블$|^머신$|^덤벨$|^바벨$/;
+  const ALIAS = [];   // [정리된 이름, 운동]
+  const ALL = {};
+  PARTS.slice(0, 3).forEach((p, pi) => ['big', 'small'].forEach(g => p[g].forEach(e => {
+    e.part = pi; e.group = g; ALL[e.name] = e;
+    [e.name].concat(e.alias).forEach(a => ALIAS.push([norm(a), e]));
+  })));
+  ALIAS.sort((a, b) => b[0].length - a[0].length);
+  const CUSTOM = {};  // 기록에만 있는 운동 (정리된 이름 → 운동)
+  function canon(raw){
+    const n = norm(raw);
+    if (!n || SKIP.test(n) || /^pt/i.test(String(raw).trim())) return null;
+    for (const [a, e] of ALIAS) if (n === a || n.startsWith(a)) return e;
+    return CUSTOM[n] || null;
+  }
   const tagOf = e => e.group === 'big' ? PARTS[e.part].bigTag : PARTS[e.part].smallTag;
 
   const fmt = n => (Math.round(n * 100) / 100).toString();
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
   const num = v => { const n = parseFloat(v); return isNaN(n) ? null : n; };
+  const todayStr = () => todayKey().slice(3).replace(/_/g, '-');
+  const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 864e5);
 
-  // 운동일지 기록 (wk_tb_YYYY_MM_DD), 최신순
-  function journal(){
-    const out = [];
+  /* ── 운동일지 읽기 & 분석 ── */
+  function analyze(){
+    const today = todayStr(), days = [];
     try {
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
-        const m = k && k.match(/^wk_tb_(\d{4})_(\d{2})_(\d{2})$/);
+        const m = k && k.match(/^wk_(?:tb|wk)_(\d{4})_(\d{2})_(\d{2})$/);
         if (!m) continue;
-        try { const d = JSON.parse(localStorage.getItem(k)); if (d) out.push({ date: m[1] + '-' + m[2] + '-' + m[3], key: k, d }); } catch(e) {}
+        try { const d = JSON.parse(localStorage.getItem(k)); if (d) days.push({ date: m[1] + '-' + m[2] + '-' + m[3], d }); } catch(e) {}
       }
     } catch(e) {}
-    return out.sort((a, b) => a.date < b.date ? 1 : -1);
+    days.sort((a, b) => a.date < b.date ? 1 : -1);
+
+    // 기록에만 있는 운동도 3번 이상 했으면 후보로 넣기 (근육 태그로 부위 판단)
+    const rawCount = {};
+    days.forEach(day => (day.d.exercises || []).forEach(x => {
+      const raw = String(x.name || '').trim(), n = norm(raw);
+      if (n && !canon(raw) && !SKIP.test(n) && !/^pt/i.test(raw)) rawCount[n] = (rawCount[n] || 0) + 1;
+    }));
+    days.forEach(day => (day.d.exercises || []).forEach(x => {
+      const raw = String(x.name || '').trim(), n = norm(raw);
+      if (!rawCount[n] || rawCount[n] < 3 || n.length < 3 || CUSTOM[n] || canon(raw)) return;
+      const t = x.muscle || '';
+      const part = t === '등' ? 0 : t === '가슴' ? 1 : (t === '하체' || t === '어깨') ? 2 : t === '팔' ? (/삼두|푸쉬|푸시|익스텐션|킥백/.test(n) ? 1 : 0) : -1;
+      if (part === -1) return;
+      const group = (t === '팔' || t === '어깨') ? 'small' : 'big';
+      const k = /덤벨/.test(n) ? 'd' : /바벨|스미스/.test(n) ? 'b' : /케이블/.test(n) ? 'c' : 'm';
+      const e = E(raw, k, 10, 12, '90초', '내 기록에 자주 있는 운동이에요');
+      e.part = part; e.group = group; e.custom = true;
+      CUSTOM[n] = e; ALL[e.name] = e; PARTS[part][group].push(e);
+    }));
+
+    const hist = {};            // 운동 → [{date, sets}] 최신순
+    const raws = {};            // 운동 → {사용자가 쓴 이름: 횟수}
+    const notes = {};           // 운동 → {date, text, pain}
+    days.forEach(day => {
+      day.parts = [0, 0, 0]; day.names = [];
+      (day.d.exercises || []).forEach(x => {
+        const raw = String(x.name || '').trim();
+        const e = canon(raw);
+        if (!e) return;
+        day.names.push(e.name);
+        day.parts[e.part]++;
+        if (day.date < today) {
+          (hist[e.name] = hist[e.name] || []).push({ date: day.date, sets: x.sets || [] });
+          const r = raws[e.name] = raws[e.name] || {}; r[raw] = (r[raw] || 0) + 1;
+        }
+      });
+    });
+
+    // 메모에서 운동별 메모·통증 찾기
+    const PAIN = /허리|통증|아프|아파|찢|중단|어지|띵|무릎|손목|어깨가|다침|다쳤|머리|깨질/;
+    days.forEach(day => {
+      if (day.date >= today || !day.d.memo) return;
+      let lastE = null;
+      String(day.d.memo).split(/\n|\/|\.(?!\d)/).map(s => s.trim()).filter(Boolean).forEach(s => {
+        const ns = norm(s);
+        const hit = ALIAS.find(([a]) => a.length >= 3 && ns.indexOf(a) !== -1);
+        // 운동 이름 없이 통증만 적은 문장은 바로 앞에 적은 운동 이야기로 봄
+        if (!hit) {
+          const ln = lastE && notes[lastE.name];
+          if (ln && ln.date === day.date && PAIN.test(s)) { ln.pain = true; ln.text += ' / ' + s; }
+          return;
+        }
+        lastE = hit[1];
+        const e = hit[1], prev = notes[e.name];
+        if (!prev || prev.date < day.date) notes[e.name] = { date: day.date, text: s, pain: PAIN.test(s) || (prev && prev.pain) };
+        else if (PAIN.test(s)) prev.pain = true;
+      });
+    });
+
+    // 부위별 마지막 날짜 (세 부위가 다 섞인 날 = 전신, 순서 계산에서 제외)
+    const isFull = day => day.parts.every(c => c > 0);
+    const doneParts = day => isFull(day) ? [] : day.parts.map((c, i) => c >= 2 || (c >= 1 && day.parts.filter(x => x > 0).length === 1) ? i : -1).filter(i => i !== -1);
+    const last = [null, null, null], recent4w = [0, 0, 0];
+    days.forEach(day => {
+      if (day.date >= today) return;
+      doneParts(day).forEach(i => { if (!last[i]) last[i] = day.date; if (daysBetween(day.date, today) <= 28) recent4w[i]++; });
+    });
+    return { days, hist, raws, notes, last, recent4w, isFull, doneParts, today };
   }
-  function todayStr(){ const k = todayKey().slice(3); return k.replace(/_/g, '-'); }
-  // 그날 한 부위 판단: 운동 이름 → 근육 태그 순
-  function partOf(d){
-    if (d.muscle === '전신') return FULL;
-    const cnt = [0, 0, 0];
-    (d.exercises || []).forEach(e => { const x = ALL[(e.name || '').trim()]; if (x) cnt[x.part]++; });
-    const mx = Math.max.apply(null, cnt);
-    if (cnt.every(c => c > 0)) return FULL;   // 세 부위가 다 섞였으면 전신으로 봄
-    if (mx > 0) return cnt.indexOf(mx);
-    const tags = [d.muscle].concat((d.exercises || []).map(e => e.muscle)).filter(Boolean);
-    for (const t of tags) { const pi = PARTS.findIndex(p => p.tags.indexOf(t) !== -1); if (pi !== -1) return pi; }
-    return -1;
-  }
-  function autoPart(J){
-    const today = todayStr();
-    const t = J.find(j => j.date === today);
-    if (t) { const p = partOf(t.d); if (p !== -1) return { part: p, why: p === FULL ? '오늘 운동일지에 전신으로 적었어요.' : '오늘 운동일지에 적은 부위예요.' }; }
-    for (const j of J) {
-      if (j.date >= today) continue;
-      const p = partOf(j.d);
-      if (p !== -1 && p !== FULL) return { part: (p + 1) % 3, why: '지난 운동(' + j.date.slice(5).replace('-', '/') + ' ' + PARTS[p].name + ') 다음 차례예요.' };
-    }
-    return { part: 0, why: '운동일지 기록이 없어서 ①부터 시작해요.' };
-  }
-  // 마지막 기록에서 추천 무게
-  function suggest(e, J){
-    const today = todayStr();
-    for (const j of J) {
-      if (j.date >= today) continue;
-      const ex = (j.d.exercises || []).find(x => (x.name || '').trim() === e.name);
-      if (!ex) continue;
-      const sets = (ex.sets || []).map(s => ({ kg: num(s.kg), reps: num(s.reps) })).filter(s => s.kg != null || s.reps != null);
-      const ws = sets.filter(s => s.kg != null).map(s => s.kg);
-      if (!ws.length) continue;
-      const w = Math.max.apply(null, ws);
-      const top = sets.filter(s => s.kg === w);
-      const reps = sets.map(s => s.reps == null ? '–' : s.reps).join('/');
-      const ok = sets.length >= 3 && top.every(s => s.reps != null && s.reps >= e.hi) && sets.every(s => s.reps != null && s.reps >= e.hi);
-      const inc = INC[e.k];
-      return ok
-        ? { w: w + inc, up: true, why: `지난번 ${fmt(w)}kg × ${reps}회 → ${e.hi}회 다 채워서 +${fmt(inc)}kg` }
-        : { w, up: false, why: `지난번 ${fmt(w)}kg × ${reps}회 → 같은 무게로 ${e.hi}회 도전` };
-    }
-    if (e.start != null) return { w: e.start, up: false, why: '첫 기록 · 시작 무게' };
-    return { w: null, up: false, why: '첫 기록 · 마지막 2~3회가 힘든 무게로 가볍게 시작' };
+  let A = null;
+  function getA(){ if (!A) { A = analyze(); } return A; }
+  function refresh(){ A = null; }
+
+  function displayName(e, a){
+    const r = a.raws[e.name];
+    if (!r) return e.name;
+    return Object.keys(r).sort((x, y) => r[y] - r[x])[0];
   }
 
-  // 날짜 시드 난수
+  /* ── 다음 차례 부위: 가장 오래 안 한 부위 (오늘 이미 적었으면 그 부위) ── */
+  function autoPart(a){
+    const t = a.days.find(d => d.date === a.today);
+    if (t && t.names.length) {
+      if (a.isFull(t)) return { part: FULL, why: '오늘 운동일지에 전신으로 적었어요.' };
+      const dp = a.doneParts(t);
+      if (dp.length) return { part: dp[0], why: '오늘 운동일지에 적은 부위예요.' };
+    }
+    let best = 0;
+    for (let i = 1; i < 3; i++) {
+      if (a.last[best] == null) break;
+      if (a.last[i] == null || a.last[i] < a.last[best]) best = i;
+    }
+    if (a.last[best] == null) return { part: best, why: a.last.some(Boolean) ? '아직 안 한 부위예요.' : '운동일지 기록이 없어서 ①부터 시작해요.' };
+    return { part: best, why: '가장 오래 안 한 부위예요 (마지막 ' + a.last[best].slice(5).replace('-', '/') + ', ' + daysBetween(a.last[best], a.today) + '일 전).' };
+  }
+
+  /* ── 추천 무게: 실제 기록(세트별 무게·횟수)으로 계산 ── */
+  function sessions(e, a){
+    return (a.hist[e.name] || []).map(h => {
+      let kg = null;
+      const sets = h.sets.map(s => { const k = num(s.kg); if (k != null) kg = k; return { kg: k != null ? k : kg, reps: num(s.reps) }; })
+        .filter(s => s.kg != null || s.reps != null);
+      const ws = sets.filter(s => s.kg != null);
+      if (!ws.length) return null;
+      // 가장 많이 한 무게를 본세트로 (같으면 무거운 쪽)
+      const cnt = {}; ws.forEach(s => cnt[s.kg] = (cnt[s.kg] || 0) + 1);
+      const w = Object.keys(cnt).map(Number).sort((x, y) => cnt[y] - cnt[x] || (e.k === 'a' ? x - y : y - x))[0];
+      const work = ws.filter(s => s.kg === w);
+      return { date: h.date, w, reps: work.map(s => s.reps), all: sets };
+    }).filter(Boolean);
+  }
+  const roundTo = (v, step) => Math.max(0, Math.round(v / step) * step);
+  function suggest(e, a){
+    const S = sessions(e, a), inc = INC[e.k], step = STEP[e.k];
+    const note = a.notes[e.name] || null;
+    if (!S.length) {
+      const n = (a.hist[e.name] || []).length;
+      if (e.start != null) return { w: e.start, lo: e.lo, hi: e.hi, why: '첫 기록 · 시작 무게', note };
+      return { w: null, lo: e.lo, hi: e.hi, why: n ? `${n}번 했지만 무게 기록이 없어요 · 마지막 2~3회가 힘든 무게로` : '첫 기록 · 마지막 2~3회가 힘든 무게로 가볍게 시작', note };
+    }
+    const L = S[0];
+    const repsTxt = L.reps.map(r => r == null ? '–' : r).join('/');
+    const R = L.reps.filter(r => r != null);
+    const hit = R.filter(r => r >= e.hi).length;
+    // 본세트 2개 이상, 그중 한 세트 정도 빼고 목표 횟수를 채웠으면 증량
+    const ok = R.length >= 2 && hit >= Math.max(2, R.length - 1);
+    const way = ok && R.every(r => r >= e.hi + 4);
+    const pain = note && note.pain;
+    let w = L.w, up = false, why, lo = e.lo, hi = e.hi;
+    const label = e.k === 'a' ? '보조 ' : '';
+    if (!R.length) {
+      why = `지난번 ${label}${fmt(L.w)}kg (횟수 기록 없음) → 같은 무게로 ${e.hi}회 목표`;
+    } else if (ok && pain) {
+      why = `지난번 ${label}${fmt(L.w)}kg × ${repsTxt}회 · 메모에 불편했던 기록이 있어 무게는 그대로, 자세 먼저`;
+    } else if (ok) {
+      w = L.w + inc; up = true;
+      why = `지난번 ${label}${fmt(L.w)}kg × ${repsTxt}회 → 목표 ${e.hi}회 ${way ? '넉넉히 ' : ''}채워서 ${e.k === 'a' ? '보조 ' + fmt(-inc) + 'kg 줄이기' : '+' + fmt(inc) + 'kg'}`;
+    } else {
+      // 정체: 같은 무게로 3번 이상 목표를 못 채움
+      const same = S.slice(0, 4).filter(s => s.w === L.w).length;
+      if (same >= 3) {
+        why = `${label}${fmt(L.w)}kg에서 ${same}번째 · 이번엔 세트마다 1회씩만 더 (${repsTxt}회 → ${e.hi}회 목표)`;
+      } else {
+        why = `지난번 ${label}${fmt(L.w)}kg × ${repsTxt}회 → 같은 무게로 ${e.hi}회 도전`;
+      }
+    }
+    // 오래 쉬었으면 살짝 가볍게
+    const gap = daysBetween(L.date, a.today);
+    if (gap > 42) {
+      w = e.k === 'a' ? L.w + 5 : Math.min(L.w, roundTo(L.w * 0.9, step)); up = false;
+      why = `${gap}일 만이라 지난번(${label}${fmt(L.w)}kg × ${repsTxt}회)보다 살짝 가볍게`;
+    } else if (gap > 21 && up) {
+      w = L.w; up = false;
+      why = `${gap}일 만이라 증량은 다음에, 지난번 무게 그대로 (${repsTxt}회 했었음)`;
+    }
+    return { w: roundTo(w, step) || (e.k === 'a' ? 0 : w), up, why, lo, hi, note, times: S.length };
+  }
+
+  /* ── 운동 고르기: 날짜 시드 + 내 기록 기반 가중치 ── */
   function rng(seedStr){
     let h = 1779033703 ^ seedStr.length;
     for (let i = 0; i < seedStr.length; i++) { h = Math.imul(h ^ seedStr.charCodeAt(i), 3432918353); h = h << 13 | h >>> 19; }
-    let a = h >>> 0;
-    return function(){ a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+    let x = h >>> 0;
+    return function(){ x |= 0; x = x + 0x6D2B79F5 | 0; let t = Math.imul(x ^ x >>> 15, 1 | x); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
   }
   function pick(pool, n, weightOf, rand){
     const left = pool.slice(), out = [];
     while (out.length < n && left.length) {
-      const ws = left.map(weightOf), sum = ws.reduce((a, b) => a + b, 0);
+      const ws = left.map(weightOf), sum = ws.reduce((p, q) => p + q, 0);
       let r = rand() * sum, i = 0;
       while (i < left.length - 1 && (r -= ws[i]) > 0) i++;
       out.push(left.splice(i, 1)[0]);
     }
     return out;
   }
-  function choose(pi, J, reroll){
-    const today = todayStr();
-    // 같은 부위 최근 2번 한 운동은 덜 뽑히게
-    const recent = J.filter(j => j.date < today && partOf(j.d) === pi).slice(0, 2)
-      .map(j => (j.d.exercises || []).map(e => (e.name || '').trim()));
-    const weightOf = e => recent[0] && recent[0].indexOf(e.name) !== -1 ? 0.25 : recent[1] && recent[1].indexOf(e.name) !== -1 ? 0.6 : 1;
-    const rand = rng(today + '|' + pi + '|' + reroll);
+  function weighter(a, recentDays){
+    const recent = recentDays.map(d => d.names);
+    return e => {
+      const times = (a.hist[e.name] || []).length;
+      let w = times >= 3 ? 4 : times >= 1 ? 1.5 : 0.7;          // 해 본 운동 우선
+      if (recent[0] && recent[0].indexOf(e.name) !== -1) w *= 0.4; // 지난번에 한 건 덜
+      else if (recent[1] && recent[1].indexOf(e.name) !== -1) w *= 0.7;
+      const last = (a.hist[e.name] || [])[0];
+      if (last && daysBetween(last.date, a.today) > 28) w *= 1.4; // 한동안 안 한 운동은 조금 더
+      const nt = a.notes[e.name];
+      if (nt && nt.pain) w *= 0.35;                                // 메모에 통증·불편이 있던 운동은 덜
+      return w;
+    };
+  }
+  function choose(pi, a, reroll){
+    const rand = rng(a.today + '|' + pi + '|' + reroll);
     if (pi === FULL) {
-      const recent2 = J.filter(j => j.date < today).slice(0, 2).map(j => (j.d.exercises || []).map(e => (e.name || '').trim()));
-      const w2 = e => recent2[0] && recent2[0].indexOf(e.name) !== -1 ? 0.25 : recent2[1] && recent2[1].indexOf(e.name) !== -1 ? 0.6 : 1;
-      return pick(PARTS[2].big, 1, w2, rand)
-        .concat(pick(PARTS[1].big, 1, w2, rand))
-        .concat(pick(PARTS[0].big, 1, w2, rand))
-        .concat(pick(PARTS[2].small.concat(PARTS[0].small, PARTS[1].small), 2, w2, rand));
+      const wf = weighter(a, a.days.filter(d => d.date < a.today && d.names.length).slice(0, 2));
+      return pick(PARTS[2].big, 1, wf, rand).concat(pick(PARTS[1].big, 1, wf, rand), pick(PARTS[0].big, 1, wf, rand),
+        pick(PARTS[2].small.concat(PARTS[0].small, PARTS[1].small), 2, wf, rand));
     }
-    return pick(PARTS[pi].big, 3, weightOf, rand).concat(pick(PARTS[pi].small, 2, weightOf, rand));
+    const wf = weighter(a, a.days.filter(d => d.date < a.today && a.doneParts(d).indexOf(pi) !== -1).slice(0, 2));
+    return pick(PARTS[pi].big, 3, wf, rand).concat(pick(PARTS[pi].small, 2, wf, rand));
   }
 
+  /* ── 화면 ── */
   let part = null, reroll = 0, shown = [];
-  function journalNames(){ return [...document.querySelectorAll('#exerciseList .ex-name')].map(i => i.value.trim()); }
+  const journalNames = () => [...document.querySelectorAll('#exerciseList .ex-name')].map(i => norm(i.value));
 
   function render(resetPart){
-    const J = journal(), auto = autoPart(J);
+    refresh();
+    const a = getA(), auto = autoPart(a);
     if (resetPart || part == null) { part = auto.part; reroll = 0; }
     const P = PARTS[part];
     document.getElementById('rcPart').textContent = P.no + ' ' + P.name;
@@ -1773,17 +1920,22 @@ const RC = (function(){
     document.getElementById('rcChips').innerHTML = PARTS.map((p, i) =>
       `<div class="rc-chip${i === part ? ' on' : ''}" data-rc-part="${i}">${p.no} ${p.name}${i === auto.part ? ' ●' : ''}</div>`).join('');
     const inJ = journalNames();
-    shown = choose(part, J, reroll).map(e => Object.assign({ e }, suggest(e, J)));
-    document.getElementById('rcList').innerHTML =
+    shown = choose(part, a, reroll).map(e => Object.assign({ e, dn: displayName(e, a) }, suggest(e, a)));
+    const stat = a.last.some(Boolean)
+      ? `<div class="rc-note"><b>최근 4주</b> ${PARTS.slice(0, 3).map((p, i) => p.name + ' ' + a.recent4w[i] + '회').join(' · ')}</div>` : '';
+    document.getElementById('rcList').innerHTML = stat +
       `<div class="rc-note"><b>워밍업</b> ${esc(P.warm)}</div>` +
       shown.map((s, i) => {
-        const e = s.e, added = inJ.indexOf(e.name) !== -1;
-        const wHtml = s.w == null ? '<div class="rc-w none">무게 직접</div>' : `<div class="rc-w">${fmt(s.w)}<small>kg</small></div>`;
+        const e = s.e, added = inJ.indexOf(norm(s.dn)) !== -1 || inJ.indexOf(norm(e.name)) !== -1;
+        const unit = e.k === 'a' ? '<small>kg 보조</small>' : '<small>kg</small>';
+        const wHtml = s.w == null ? '<div class="rc-w none">무게 직접</div>' : `<div class="rc-w">${fmt(s.w)}${unit}</div>`;
+        const sub = norm(s.dn) !== norm(e.name) ? `<span class="rc-alt">${esc(e.name)}</span>` : '';
+        const memo = s.note ? `<div class="rc-memo${s.note.pain ? ' pain' : ''}">${s.note.pain ? '⚠️' : '📝'} ${esc(s.note.date.slice(5).replace('-', '/'))} 메모: ${esc(s.note.text)}</div>` : '';
         return `<div class="rc-ex">
-          <div class="rc-head"><div class="rc-nm"><small>${tagOf(e)}</small>${esc(e.name)}</div>${wHtml}</div>
+          <div class="rc-head"><div class="rc-nm"><small>${tagOf(e)}</small>${esc(s.dn)}${sub}</div>${wHtml}</div>
           <div class="rc-why${s.up ? ' up' : ''}">${esc(s.why)}</div>
-          <div class="rc-meta"><span class="rc-pill">3×${e.lo}–${e.hi}</span><span class="rc-pill">휴식 ${esc(e.rest)}</span></div>
-          <div class="rc-tip">${esc(e.tip)}</div>
+          <div class="rc-meta"><span class="rc-pill">3×${s.lo === s.hi ? s.hi : s.lo + '–' + s.hi}</span><span class="rc-pill">휴식 ${esc(e.rest)}</span>${s.times ? `<span class="rc-pill mine">내 기록 ${s.times}회</span>` : ''}</div>
+          <div class="rc-tip">${esc(e.tip)}</div>${memo}
           <button class="rc-add${added ? ' done' : ''}" data-rc-add="${i}">${added ? '✓ 일지에 있음' : '+ 일지에 추가'}</button>
         </div>`;
       }).join('') +
@@ -1791,10 +1943,10 @@ const RC = (function(){
   }
 
   function addOne(s){
-    if (journalNames().indexOf(s.e.name) !== -1) return false;
+    if (journalNames().indexOf(norm(s.dn)) !== -1) return false;
     const keep = wkMuscle;
     wkMuscle = tagOf(s.e);   // 카드 라벨용
-    addExercise({ name: s.e.name, sets: [1, 2, 3].map(() => ({ kg: s.w == null ? '' : fmt(s.w), reps: s.e.lo })) });
+    addExercise({ name: s.dn, sets: [1, 2, 3].map(() => ({ kg: s.w == null ? '' : fmt(s.w), reps: s.lo })) });
     wkMuscle = keep;
     return true;
   }
@@ -1808,9 +1960,9 @@ const RC = (function(){
   document.getElementById('rcWrap').addEventListener('click', ev => {
     const c = ev.target.closest('[data-rc-part]');
     if (c) { part = +c.dataset.rcPart; reroll = 0; render(false); return; }
-    const a = ev.target.closest('[data-rc-add]');
-    if (a && !a.classList.contains('done')) {
-      if (addOne(shown[+a.dataset.rcAdd])) { setMainTag(); render(false); toast('운동일지에 추가했어요 ↑'); }
+    const b = ev.target.closest('[data-rc-add]');
+    if (b && !b.classList.contains('done')) {
+      if (addOne(shown[+b.dataset.rcAdd])) { setMainTag(); render(false); toast('운동일지에 추가했어요 ↑'); }
     }
   });
   document.getElementById('rcReroll').addEventListener('click', () => { reroll++; render(false); });
@@ -1821,7 +1973,6 @@ const RC = (function(){
     render(false);
     toast(n ? n + '개 운동을 일지에 추가했어요 ↑' : '이미 모두 일지에 있어요');
   });
-  // 운동 저장 뒤 / 운동 탭 열 때 다시 계산
   document.getElementById('pg-workout').addEventListener('click', ev => {
     if (ev.target.closest('.save-btn')) setTimeout(() => render(false), 0);
   });
@@ -1829,7 +1980,7 @@ const RC = (function(){
     if (t.textContent.indexOf('운동') !== -1) t.addEventListener('click', () => render(true));
   });
 
-  return { render, suggest: name => suggest(ALL[name], journal()), PARTS };
+  return { render, _a: () => getA(), _suggest: name => suggest(ALL[name], getA()), _canon: canon };
 })();
 RC.render(true);
 </script>
